@@ -24,7 +24,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "mzc-pj4"
+      Project     = "fiveline"
       Environment = "dev"
       ManagedBy   = "terraform"
     }

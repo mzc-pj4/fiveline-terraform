@@ -1,6 +1,7 @@
 locals {
-  project = "mzc-pj4"
-  env     = var.environment
+  project      = "fiveline"
+  env          = var.environment
+  cluster_name = "${local.project}-${local.env}-eks"
 }
 
 # ── VPC ───────────────────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ resource "aws_subnet" "public_1" {
     Service                                         = "network"
     Name                                            = "${local.project}-${local.env}-public-1"
     "kubernetes.io/role/elb"                        = "1"
-    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
@@ -42,7 +43,7 @@ resource "aws_subnet" "public_2" {
     Service                                         = "network"
     Name                                            = "${local.project}-${local.env}-public-2"
     "kubernetes.io/role/elb"                        = "1"
-    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
@@ -55,7 +56,7 @@ resource "aws_subnet" "private_eks_1" {
     Service                                         = "network"
     Name                                            = "${local.project}-${local.env}-private-eks-1"
     "kubernetes.io/role/internal-elb"               = "1"
-    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
@@ -68,7 +69,7 @@ resource "aws_subnet" "private_eks_2" {
     Service                                         = "network"
     Name                                            = "${local.project}-${local.env}-private-eks-2"
     "kubernetes.io/role/internal-elb"               = "1"
-    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   }
 }
 
