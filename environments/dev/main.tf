@@ -26,6 +26,12 @@ module "eks" {
   log_retention_in_days    = var.log_retention_in_days
 }
 
+module "dynamodb" {
+  source       = "../../modules/dynamodb"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
 module "rds" {
   source = "../../modules/rds"
 
