@@ -23,11 +23,9 @@ resource "aws_security_group" "elasticache_sg" {
 
 resource "aws_elasticache_subnet_group" "cache_subnet_group" {
   name        = "${local.project}-cache-subnet-group"
-  description = "ElastiCache 전용 프라이빗 서브넷 그룹 (ap-northeast-2a/2c)"
-  subnet_ids  = [
-    aws_subnet.private_cache_2a.id,
-    aws_subnet.private_cache_2c.id,
-  ]
+  description = "ElastiCache private subnet group for ap-northeast-2a and 2c"
+  
+  subnet_ids  = [aws_subnet.private_cache_2a.id, aws_subnet.private_cache_2c.id]
 
   tags = {
     Service = "cache"
@@ -39,7 +37,7 @@ resource "aws_elasticache_subnet_group" "cache_subnet_group" {
 
 resource "aws_elasticache_parameter_group" "cache_params" {
   name        = "${local.project}-cache-params"
-  description = "fiveline Redis 7 파라미터 그룹 (기본값 사용)"
+  description = "Fiveline Redis 7 parameter group using default values" 
   family      = "redis7"
 
   tags = {
