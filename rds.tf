@@ -31,11 +31,10 @@ resource "aws_security_group" "rds_sg" {
 
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name        = "${local.project}-rds-subnet-group"
-  description = "RDS 전용 프라이빗 서브넷 그룹 (ap-northeast-2a/2c)"
-  subnet_ids  = [
-    aws_subnet.private_rds_2a.id,
-    aws_subnet.private_rds_2c.id,
-  ]
+  description = "RDS private subnet group for ap-northeast-2a and 2c"
+  
+  # 가독성 및 특수문자 에러 방지를 위해 한 줄로 정렬
+  subnet_ids  = [aws_subnet.private_rds_2a.id, aws_subnet.private_rds_2c.id]
 
   tags = {
     Service = "rds"
@@ -48,7 +47,10 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 resource "aws_db_instance" "rds_primary" {
   identifier     = "${local.project}-rds-primary"
   engine         = "postgres"
-  engine_version = "16.3"
+  
+  # ⚠️ 기존 "16.3" 대신 "16"으로 수정하여 AWS가 최신 마이너 버전을 자동 선택하게 합니다.
+  engine_version = "16" 
+  
   instance_class = "db.t3.medium"
 
   db_name  = "fiveline"
@@ -86,7 +88,7 @@ resource "aws_db_instance" "rds_primary" {
 
 resource "aws_db_instance" "rds_replica" {
   identifier          = "${local.project}-rds-replica"
-  replicate_source_db = aws_db_instance.rds_primary.identifier
+  replicate_source_db = aws_db_instance.rds_primary.arn
   instance_class      = "db.t3.medium"
   availability_zone   = "ap-northeast-2c"
 
