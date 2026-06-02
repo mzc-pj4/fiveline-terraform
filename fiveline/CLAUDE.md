@@ -30,7 +30,7 @@
 | VPC | 퍼블릭/프라이빗 서브넷, 멀티 AZ 구성 |
 | Public Subnet | NAT Gateway, Bastion Host |
 | Private Subnet (EKS) | EKS Worker Node (멀티 AZ) |
-| Private Subnet (RDS) | RDS Primary / Standby (Multi-AZ) |
+| Private Subnet (RDS) | RDS Primary(2a) / Standby(2c, Multi-AZ 자동) + Read Replica × 2 (Replica-A: 2a, Replica-C: 2c) |
 | Private Subnet (Cache) | ElastiCache Primary / Replica |
 | EKS Cluster | Kubernetes 기반 컨테이너 오케스트레이션 |
 | ALB | Application Load Balancer |

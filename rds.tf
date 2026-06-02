@@ -2,7 +2,7 @@
 
 resource "aws_security_group" "rds_sg" {
   name        = "${local.project}-rds-sg"
-  description = "RDS PostgreSQL security group - allow 5432 from EKS cluster SG"
+  description = "RDS PostgreSQL security group - allow 5432 from EKS cluster SG and Bastion"
   vpc_id      = aws_vpc.fiveline_vpc.id
 
   ingress {
@@ -11,6 +11,14 @@ resource "aws_security_group" "rds_sg" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_eks_cluster.fiveline_eks.vpc_config[0].cluster_security_group_id]
+  }
+
+  ingress {
+    description     = "PostgreSQL from Bastion WorkStation (DB admin access)"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
   }
 
   egress {
@@ -32,8 +40,6 @@ resource "aws_security_group" "rds_sg" {
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name        = "${local.project}-rds-subnet-group"
   description = "RDS private subnet group for ap-northeast-2a and 2c"
-  
-  # 가독성 및 특수문자 에러 방지를 위해 한 줄로 정렬
   subnet_ids  = [aws_subnet.private_rds_2a.id, aws_subnet.private_rds_2c.id]
 
   tags = {
@@ -42,22 +48,106 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
   }
 }
 
+# ── RDS Master Password ───────────────────────────────────────────────────────
+# manage_master_user_password = true는 Read Replica 생성과 호환되지 않음 (AWS 제약)
+# random_password로 생성 후 보안 담당자가 Secrets Manager에 등록
+
+resource "random_password" "rds_master" {
+  length  = 20
+  special = false  # PostgreSQL 연결 문자열 파싱 오류 방지
+}
+
+# ── RDS Parameter Group (PostgreSQL 16) ──────────────────────────────────────
+# 슬로우 쿼리 로깅(PERF-008) + Top SQL 수집(MON-003) + 커넥션 감사
+
+resource "aws_db_parameter_group" "rds_pg16" {
+  name        = "${local.project}-rds-pg16"
+  family      = "postgres16"
+  description = "Fiveline PostgreSQL 16 - slow query logging + pg_stat_statements"
+
+  # PERF-008: 슬로우 쿼리 1초 이상 기록
+  parameter {
+    name         = "log_min_duration_statement"
+    value        = "1000"
+    apply_method = "immediate"
+  }
+
+  # Top SQL 수집 — Performance Insights 연계 (static: 재시작 필요)
+  parameter {
+    name         = "shared_preload_libraries"
+    value        = "pg_stat_statements,auto_explain"
+    apply_method = "pending-reboot"
+  }
+
+  parameter {
+    name         = "auto_explain.log_min_duration"
+    value        = "1000"
+    apply_method = "pending-reboot"
+  }
+
+  parameter {
+    name         = "pg_stat_statements.track"
+    value        = "all"
+    apply_method = "pending-reboot"
+  }
+
+  # 커넥션 이상 추적
+  parameter {
+    name         = "log_connections"
+    value        = "1"
+    apply_method = "immediate"
+  }
+
+  parameter {
+    name         = "log_disconnections"
+    value        = "1"
+    apply_method = "immediate"
+  }
+
+  tags = {
+    Service = "rds"
+    Name    = "${local.project}-rds-pg16"
+  }
+}
+
+# ── RDS Enhanced Monitoring IAM Role ─────────────────────────────────────────
+# OS 레벨 지표(CPU, 메모리, 파일시스템)를 CloudWatch에 1분 간격으로 전송 (MON-003)
+
+resource "aws_iam_role" "rds_monitoring_role" {
+  name = "${local.project}-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "monitoring.rds.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Service = "rds"
+    Name    = "${local.project}-rds-monitoring-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring_attach" {
+  role       = aws_iam_role.rds_monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
 # ── RDS Primary Instance (Multi-AZ Standby — HA) ─────────────────────────────
 
 resource "aws_db_instance" "rds_primary" {
-  identifier     = "${local.project}-rds-primary"
-  engine         = "postgres"
-  
-  # ⚠️ 기존 "16.3" 대신 "16"으로 수정하여 AWS가 최신 마이너 버전을 자동 선택하게 합니다.
-  engine_version = "16" 
-  
-  instance_class = "db.t3.medium"
+  identifier        = "${local.project}-rds-primary"
+  engine            = "postgres"
+  engine_version    = "16"
+  instance_class    = "db.t3.medium"
+  availability_zone = "ap-northeast-2a"
 
   db_name  = "fiveline"
   username = "fiveline_admin"
-
-  # 비밀번호를 Secrets Manager로 자동 관리 (KMS 암호화)
-  manage_master_user_password = true
+  password = random_password.rds_master.result
 
   allocated_storage     = 20
   max_allocated_storage = 100
@@ -69,6 +159,23 @@ resource "aws_db_instance" "rds_primary" {
 
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
+
+  # 파라미터 그룹 — 슬로우 쿼리 로깅 + pg_stat_statements (PERF-008)
+  parameter_group_name = aws_db_parameter_group.rds_pg16.name
+
+  # Enhanced Monitoring — OS 레벨 지표 60초 간격 전송 (MON-003)
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_monitoring_role.arn
+
+  # Performance Insights — Top SQL 분석, 무료 7일 보존 (MON-003, PERF-008)
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
+
+  # TLS CA 인증서 명시 — 앱 sslmode=require와 함께 SEC-011 충족 (PostgreSQL 16 권장)
+  ca_cert_identifier = "rds-ca-rsa2048-g1"
+
+  # 마이너 버전 자동 업그레이드 — 유지보수 창(Mon 04:00-05:00) 내 적용
+  auto_minor_version_upgrade = true
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
@@ -84,10 +191,10 @@ resource "aws_db_instance" "rds_primary" {
   }
 }
 
-# ── RDS Read Replica (읽기 분산 — 분석 쿼리 분리) ────────────────────────────
+# ── RDS Read Replica C (2c — EKS 2c Pod 조회 + 데이터 파이프라인 격리) ────────
 
 resource "aws_db_instance" "rds_replica" {
-  identifier          = "${local.project}-rds-replica"
+  identifier          = "${local.project}-rds-replica-c"
   replicate_source_db = aws_db_instance.rds_primary.arn
   instance_class      = "db.t3.medium"
   availability_zone   = "ap-northeast-2c"
@@ -95,13 +202,62 @@ resource "aws_db_instance" "rds_replica" {
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-  # 분석/조회 트래픽 분리용 — 독립 백업 비활성
+  # Parameter Group — Primary와 동일한 슬로우 쿼리 설정 적용
+  parameter_group_name = aws_db_parameter_group.rds_pg16.name
+
+  # Primary 암호화 상속 명시 (tfsec/Checkov CICD-009 대응)
+  storage_encrypted = true
+
+  # Performance Insights — Read 트래픽 슬로우 쿼리 추적
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
+
+  # Enhanced Monitoring
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_monitoring_role.arn
+
+  ca_cert_identifier = "rds-ca-rsa2048-g1"
+
   backup_retention_period = 0
   skip_final_snapshot     = true
   apply_immediately       = true
 
   tags = {
     Service = "rds"
-    Name    = "${local.project}-rds-replica"
+    Name    = "${local.project}-rds-replica-c"
+  }
+}
+
+# ── RDS Read Replica A (2a — EKS 2a Pod 조회, Zone Affinity) ─────────────────
+# Primary(2a)와 동일 AZ 배치 → Cross-AZ 비용 제거, 2c 전체 장애 시 Read 생존
+
+resource "aws_db_instance" "rds_replica_a" {
+  identifier          = "${local.project}-rds-replica-a"
+  replicate_source_db = aws_db_instance.rds_primary.arn
+  instance_class      = "db.t3.medium"
+  availability_zone   = "ap-northeast-2a"
+
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+
+  parameter_group_name = aws_db_parameter_group.rds_pg16.name
+
+  storage_encrypted = true
+
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
+
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_monitoring_role.arn
+
+  ca_cert_identifier = "rds-ca-rsa2048-g1"
+
+  backup_retention_period = 0
+  skip_final_snapshot     = true
+  apply_immediately       = true
+
+  tags = {
+    Service = "rds"
+    Name    = "${local.project}-rds-replica-a"
   }
 }
