@@ -9,6 +9,9 @@ resource "aws_s3_bucket" "frontend" {
   # 전역 유일 버킷명: account ID 포함
   bucket = "${local.project}-frontend-${data.aws_caller_identity.current.account_id}"
 
+  # 교육용: terraform destroy 시 파일이 있어도 강제 삭제 허용
+  force_destroy = true
+
   tags = {
     Service = "frontend"
     Name    = "${local.project}-frontend"
