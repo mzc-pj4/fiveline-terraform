@@ -1,0 +1,29 @@
+# terraform.tfvars.example
+# 이 파일을 복사해서 terraform.tfvars 로 이름 변경 후 값 채우기
+# terraform.tfvars 는 절대 git push 금지 (Slack Webhook URL 포함)
+
+# S3: Lambda가 알람 이벤트를 저장할 버킷명
+s3_bucket_name = "fiveline-prod-data-xxxxxxxxxxxx"
+
+# Slack Webhook URL (Slack 앱 설정 > Incoming Webhooks에서 발급)
+# 예: https://hooks.slack.com/services/로 시작하는 URL
+slack_webhook_url = ""
+
+# ALB ARN suffix
+# AWS 콘솔 > EC2 > Load Balancers > 해당 ALB > ARN에서 "app/..." 이후 복사
+# 예: app/fiveline-prod-alb/1234567890abcdef
+alb_arn_suffix = "app/fiveline-prod-alb/xxxxxxxxxxxx"
+
+# EKS 클러스터 이름
+eks_cluster_name = "fiveline-eks"
+
+# RDS 인스턴스 ID
+# AWS 콘솔 > RDS > Databases > DB identifier 값
+rds_instance_id = "fiveline-prod-rds"
+
+# ElastiCache Redis Replication Group ID
+# AWS 콘솔 > ElastiCache > Redis clusters > Replication group ID 값
+redis_replication_group_id = "fiveline-prod-redis"
+
+# 알람 수신 이메일 (선택사항 — 비워두면 이메일 구독 미생성)
+alarm_email = "your-team@example.com"
