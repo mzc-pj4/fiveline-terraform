@@ -5,6 +5,5 @@ terraform {
     region       = "ap-northeast-2"
     use_lockfile = true
     encrypt      = true
-    profile      = "lhj"
   }
 }
