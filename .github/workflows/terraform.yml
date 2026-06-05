@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - "lhj/environments/dev/**"
   pull_request:
     branches:
       - main
+      - develop
     paths:
       - "lhj/environments/dev/**"
 
@@ -56,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: terraform-plan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # develop 머지는 plan만, main 머지만 apply 실행
 
     steps:
       - name: Checkout code
