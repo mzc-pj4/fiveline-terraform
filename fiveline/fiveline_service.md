@@ -24,7 +24,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 - **구성 요소**:
   - Python + Flask 기반 user-service, product-service, order-service (Microservice)
   - DB 마이그레이션: Alembic
-  - RDS for PostgreSQL Primary Multi-AZ (Standby — HA 페일오버) + Read Replica (실시간 조회 부하분산). Aurora 대신 RDS 선택 이유: 교육 예산 제약 + Multi-AZ로 충분한 HA 검증 범위, Aurora는 Serverless v2 최소 비용도 RDS 대비 높음
+  - RDS for PostgreSQL Primary Multi-AZ (Standby — HA 페일오버) + Read Replica × 2 (2a/2c AZ별 Zone Affinity 분산 — CQRS 패턴, Cross-AZ 비용 제거). Aurora 대신 RDS 선택 이유: 교육 예산 제약 + Multi-AZ로 충분한 HA 검증 범위, Aurora는 Serverless v2 최소 비용도 RDS 대비 높음
   - ElastiCache for Redis (Primary/Replica) — 세션/캐시
   - S3 (Frontend 정적 호스팅), CloudFront (배포)
 - **백엔드 레포 구조** (fiveline-backend):
@@ -68,7 +68,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 - **역할 요약**: 이커머스 애플리케이션에서 발생한 서비스 이벤트 로그를 실시간으로 수집하여 S3 데이터 레이크에 적재하고, 카탈로그/스키마 관리를 통해 SQL 기반 분석을 가능하게 한다.
 - **왜 필요한가**:
   - **분석 지표(검색 키워드 TOP, 장바구니→주문 전환율, 주문 실패 원인 TOP5)** 는 raw 이벤트 로그가 시계열 데이터 레이크에 축적되어야만 산출 가능하다.
-  - RDS OLTP에서 직접 분석 쿼리를 실행하면 운영 DB 성능 저하가 발생하므로, **OLTP와 OLAP를 분리**해야 한다. (RDS Read Replica는 실시간 조회 부하분산 용도이며, 이력성 집계 분석은 Athena에서 수행한다.)
+  - RDS OLTP에서 직접 분석 쿼리를 실행하면 운영 DB 성능 저하가 발생하므로, **OLTP와 OLAP를 분리**해야 한다. (RDS Read Replica × 2는 실시간 조회 부하분산 용도이며, 이력성 집계 분석은 Athena에서 수행한다. 2c Replica는 데이터 파이프라인 쿼리 격리 담당.)
   - Bedrock Agent의 입력 데이터(매출 추이, 실패 패턴)는 Athena 쿼리 결과를 기반으로 하므로 **AI 리포트 기능의 전제 조건**이다.
 - **구성 요소**:
   - CloudWatch Logs (Application Log 수집)
@@ -368,7 +368,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 |---|------|------|
 | 1 | **VPC / Subnet / NAT / Bastion** — 네트워크 베이스라인 | ✅ 구현 (NAT 1개, Bastion 예정) |
 | 2 | **EKS Cluster + On-Demand/Spot 노드 그룹 분리 + ALB Ingress** — taint/toleration/nodeSelector 포함 | ✅ 노드 구성 완료 / ALB Ingress 예정 |
-| 3 | **RDS PostgreSQL Multi-AZ(Standby) + Read Replica + ElastiCache** — 상태 저장소 | ✅ 구현 완료 |
+| 3 | **RDS PostgreSQL Multi-AZ(Standby) + Read Replica × 2(2a/2c) + ElastiCache** — 상태 저장소 | ✅ 구현 완료 |
 | 4 | **ECR + GitHub Actions + ArgoCD** — CI/CD 파이프라인 | 📋 예정 |
 | 5 | **이커머스 백엔드 핵심 API**: signup/login, products, cart, orders/from-cart, `/api/health` | ✅ 백엔드 레포 구현 |
 | 6 | **HPA (3개 서비스) + readiness/liveness probe** — Pod 탄력 확장 및 무중단 배포 전제 | ✅ 구현 완료 |

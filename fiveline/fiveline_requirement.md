@@ -28,7 +28,7 @@
 
 **기술 스택**:
 - 백엔드: Python + Flask MSA (user/product/order-service), Alembic
-- DB: RDS PostgreSQL 16.3 (Multi-AZ Standby + Read Replica)
+- DB: RDS PostgreSQL 16.3 (Multi-AZ Standby + Read Replica × 2, 2a/2c AZ별 Zone Affinity 분산)
 - 캐시: ElastiCache Redis 7 (Primary + Replica)
 - 컨테이너: EKS (On-Demand 1개 + Spot 2~6개)
 - 데이터: CloudWatch → Firehose → S3 → Glue → Athena
@@ -59,7 +59,7 @@
 | SVC-002 | 로그인 / JWT 인증 | 로그인 성공 시 JWT 발급, 만료·갱신 처리. JWT 서명키는 secretKeyRef로 주입 | Must | user-service, JWT |
 | SVC-003 | 인증/인가 미들웨어 | 보호된 API는 JWT 검증, 사용자 본인 리소스만 접근(IDOR 방지) | Must | user-service |
 | SVC-004 | 상품 목록 조회 | 페이지네이션·정렬 지원 상품 목록 API | Must | product-service |
-| SVC-005 | 상품 검색 | 키워드·카테고리 필터 검색. 조회 트래픽은 RDS Read Replica 활용 | Must | product-service, RDS Replica |
+| SVC-005 | 상품 검색 | 키워드·카테고리 필터 검색. 조회 트래픽은 RDS Read Replica 활용 (Zone Affinity — 2a Pod→Replica-A, 2c Pod→Replica-C) | Must | product-service, RDS Replica |
 | SVC-006 | 상품 상세 | 상품 단건 상세 조회. 인기 상품은 Redis 캐싱 | Must | product-service, ElastiCache |
 | SVC-007 | 장바구니 CRUD | 담기/수정/삭제/조회. 장바구니 상태 Redis 저장으로 고트래픽 대응 | Must | order-service, Redis |
 | SVC-008 | 주문 생성 | 장바구니 기반 주문 생성, 재고 차감, 트랜잭션 정합성 보장 | Must | order-service, RDS |
@@ -163,7 +163,7 @@
 | INFRA-012 | 시크릿/암호화 | RDS 자격증명은 Secrets Manager, 데이터는 KMS CMK 암호화 | Must | Secrets Manager, KMS |
 | INFRA-013 | VPC Endpoint | S3/ECR/CloudWatch/STS PrivateLink로 NAT 비용·노출 축소 | Should | VPC Endpoint |
 | INFRA-014 | Pod Disruption Budget | Spot 회수 시 서비스별 최소 가용 Pod 보장 (minAvailable: 1) | Must | K8s PDB |
-| INFRA-015 | RDS Read Replica / Proxy | 조회 트래픽 Read Replica 분산, 커넥션 폭증 시 RDS Proxy 흡수 | Should | RDS Replica, RDS Proxy |
+| INFRA-015 | RDS Read Replica × 2 / Proxy | 조회 트래픽을 2a/2c AZ별 Read Replica로 분산(Zone Affinity — Cross-AZ 비용 제거). 2c Replica는 데이터 파이프라인 쿼리 격리. Failover 시 어느 AZ 장애에도 Read 생존. 커넥션 폭증 시 RDS Proxy 흡수 | Should | RDS Replica, RDS Proxy |
 | INFRA-016 | VPC Flow Logs | 네트워크 트래픽 감사·이상탐지용 수집 | Must | VPC Flow Logs | ✅ SEC-051과 통합 구현 완료 (`cloudtrail.tf`) |
 | INFRA-017 | 멀티 리전 DR | prod 한정, RPO/RTO 기반 백업 리전 또는 Pilot Light | Could | Route53, RDS Cross-Region |
 
