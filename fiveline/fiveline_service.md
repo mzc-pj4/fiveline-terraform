@@ -22,16 +22,18 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
   - 트래픽 부하 시뮬레이션(평상시 95~98% / 프로모션 시 85~90%) 및 장애 시뮬레이션(OUT_OF_STOCK, DB_TIMEOUT, SLOW_RESPONSE)을 통해 **EKS Auto-scaling, RDS 부하, 알람 동작**을 검증하기 위한 필수 워크로드이다.
   - Bedrock Agent가 분석할 비즈니스 컨텍스트(매출, 주문 실패, 유저 행동)의 단일 진실 공급원(Single Source of Truth)이다.
 - **구성 요소**:
-  - Python + Flask 기반 user-service, product-service, order-service (Microservice)
-  - DB 마이그레이션: Alembic
+  - Python + FastAPI 기반 5개 Microservice (user / product / order / admin / notification)
+  - DB 마이그레이션: Alembic (init container 자동 실행)
   - RDS for PostgreSQL Primary Multi-AZ (Standby — HA 페일오버) + Read Replica × 2 (2a/2c AZ별 Zone Affinity 분산 — CQRS 패턴, Cross-AZ 비용 제거). Aurora 대신 RDS 선택 이유: 교육 예산 제약 + Multi-AZ로 충분한 HA 검증 범위, Aurora는 Serverless v2 최소 비용도 RDS 대비 높음
   - ElastiCache for Redis (Primary/Replica) — 세션/캐시
   - S3 (Frontend 정적 호스팅), CloudFront (배포)
+  - SQS (order → notification 이벤트 발행)
 - **백엔드 레포 구조** (fiveline-backend):
   - `docs/` — decisions, runbooks
   - `infra/` — 인프라 스크립트
-  - `platform/` — glue-jobs, grafana-dashboards, lambda
-  - `order-service/`, `product-service/`, `user-service/`
+  - `platform/` — glue-jobs, grafana-dashboards, lambda (데이터파이프라인/모니터링 팀원 담당)
+  - `user-service/` (8001), `product-service/` (8002), `order-service/` (8003)
+  - `admin-service/` (8004, NEW), `notification-service/` (8005, NEW)
 - **연관 서비스**: EKS, ALB, RDS, ElastiCache, CloudWatch, Bedrock
 
 ---
@@ -284,36 +286,44 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 
 | 영역 | Method | Endpoint | 설명 |
 |------|--------|----------|------|
-| Auth | POST | `/api/auth/signup` | 회원가입 |
-| Auth | POST | `/api/auth/login` | 로그인 (JWT 발급) |
-| Products | GET | `/api/products` | 상품 목록 |
+| Auth | POST | `/api/auth/signup` | 회원가입 (phone 선택) |
+| Auth | POST | `/api/auth/login` | 로그인 (JWT 발급, 30분 만료) |
+| Users | GET | `/api/users/me` | 내 프로필 조회 |
+| Users | PUT | `/api/users/me` | 내 프로필 수정 (name, phone) |
+| Products | GET | `/api/products` | 상품 목록 (q, category, brand, min_price, max_price, sort, page, size) |
 | Products | GET | `/api/products/{productId}` | 상품 상세 |
-| Products | GET | `/api/products?keyword=&category=` | 상품 검색 |
+| Reviews | POST | `/api/products/{productId}/reviews` | 리뷰 작성 |
+| Reviews | GET | `/api/products/{productId}/reviews` | 리뷰 조회 |
 | Cart | POST | `/api/cart/items` | 장바구니 담기 |
 | Cart | GET | `/api/cart` | 장바구니 조회 |
 | Cart | PATCH | `/api/cart/items/{cartItemId}` | 수량 변경 |
 | Cart | DELETE | `/api/cart/items/{cartItemId}` | 항목 삭제 |
 | Orders | POST | `/api/orders/from-cart` | 장바구니 기반 주문 |
 | Orders | GET | `/api/orders/me` | 내 주문 내역 |
-| Orders | POST | `/api/orders/direct` | 즉시 주문 (선택) |
-| Reviews | POST | `/api/products/{productId}/reviews` | 리뷰 작성 |
-| Reviews | GET | `/api/products/{productId}/reviews` | 리뷰 조회 |
-| System | GET | `/api/health` | 헬스체크 |
-| System | GET | `/api/error-test` | 장애 시뮬레이션 |
-| System | GET | `/api/slow-test` | 지연 시뮬레이션 |
+| Admin | GET | `/api/admin/dashboard` | 대시보드 통계 (role=admin) |
+| Admin | GET | `/api/admin/orders` | 전체 주문 목록 (role=admin) |
+| Admin | GET | `/api/admin/users` | 전체 사용자 목록 (role=admin) |
+| Admin | GET | `/api/admin/products` | 전체 상품 목록 (role=admin) |
+| Admin | PATCH | `/api/admin/products/{id}/stock` | 재고 수정 (role=admin) |
+| Notifications | GET | `/api/notifications` | 내 알림 목록 |
+| Notifications | POST | `/api/notifications/read/{id}` | 알림 읽음 처리 |
+| System | GET | `/api/health` | 헬스체크 (각 서비스) |
+| System | GET | `/api/error-test` | 장애 시뮬레이션 (order-service) |
+| System | GET | `/api/slow-test` | 지연 시뮬레이션 (order-service) |
 
-**제외 기능**: 실제 결제, 배송 관리, 쿠폰, 포인트, 소셜 로그인, 추천 시스템, 상품 관리자 페이지
+**제외 기능**: 실제 결제, 배송 관리, 쿠폰, 포인트, 소셜 로그인, 추천 시스템
 
-### 4.2 DB 테이블 (RDS for PostgreSQL)
+### 4.2 DB 스키마 및 테이블 (RDS for PostgreSQL)
 
-| 테이블 | 주요 컬럼 | 역할 |
-|--------|-----------|------|
-| `users` | id, email, password_hash, name, role, created_at, updated_at | 회원 정보 |
-| `products` | id, name, description, category, price, stock_quantity, image_url, ... | 상품 카탈로그 |
-| `cart_items` | id, user_id, product_id, quantity, ... | 장바구니 |
-| `orders` | id, user_id, total_price, status, error_code, response_time_ms, ... | 주문 헤더 (실패 원인 포함) |
-| `order_items` | id, order_id, product_id, quantity, price, created_at | 주문 라인 |
-| `reviews` | id, product_id, user_id, rating, content, ... | 상품 리뷰 |
+| 스키마 | 테이블 | 주요 컬럼 | 역할 |
+|--------|--------|-----------|------|
+| `user_schema` | `users` | id, email, password_hash, name, phone, role, created_at, updated_at | 회원 정보 |
+| `product_schema` | `products` | id, name, description, category, brand, price, original_price, stock_quantity, image_url, ... | 패션 상품 카탈로그 |
+| `product_schema` | `reviews` | id, product_id, user_id, rating, content, ... | 상품 리뷰 |
+| `order_schema` | `cart_items` | id, user_id, product_id, quantity, ... | 장바구니 |
+| `order_schema` | `orders` | id, user_id, total_price, status, error_code, response_time_ms, ... | 주문 헤더 (실패 원인 포함) |
+| `order_schema` | `order_items` | id, order_id, product_id, quantity, price, created_at | 주문 라인 |
+| `notification_schema` | `notifications` | id, user_id, type, title, message, is_read, created_at | 알림 내역 |
 
 ### 4.3 서비스 이벤트 로그
 

@@ -117,6 +117,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:DescribeLoadBalancers",
           "elasticloadbalancing:DescribeLoadBalancerAttributes",
           "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:DescribeListenerAttributes",
           "elasticloadbalancing:DescribeListenerCertificates",
           "elasticloadbalancing:DescribeSSLPolicies",
           "elasticloadbalancing:DescribeRules",
@@ -300,4 +301,128 @@ resource "aws_iam_role" "lb_controller" {
 resource "aws_iam_role_policy_attachment" "lb_controller" {
   role       = aws_iam_role.lb_controller.name
   policy_arn = aws_iam_policy.lb_controller.arn
+}
+
+# ── External Secrets Operator IRSA ────────────────────────────────────────────
+# ESO가 Secrets Manager에서 DB 자격증명/JWT 키를 읽어 K8s Secret으로 동기화
+# Helm 설치 시 ServiceAccount: external-secrets/external-secrets-sa
+
+resource "aws_iam_policy" "eso" {
+  name        = "${local.project}-eso-policy"
+  description = "External Secrets Operator - Secrets Manager 읽기 전용"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:ListSecretVersionIds"
+        ]
+        Resource = "arn:aws:secretsmanager:ap-northeast-2:${data.aws_caller_identity.current.account_id}:secret:fiveline/*"
+      }
+    ]
+  })
+
+  tags = {
+    Service = "eks"
+    Name    = "${local.project}-eso-policy"
+  }
+}
+
+resource "aws_iam_role" "eso" {
+  name = "${local.project}-eso-sa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks_oidc.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:sub" = "system:serviceaccount:external-secrets:external-secrets-sa"
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Service = "eks"
+    Name    = "${local.project}-eso-sa-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "eso" {
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.eso.arn
+}
+
+# ── Cluster Autoscaler IRSA ───────────────────────────────────────────────────
+# Helm 설치 시 ServiceAccount: kube-system/cluster-autoscaler
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  name        = "${local.project}-cluster-autoscaler-policy"
+  description = "Cluster Autoscaler - ASG 조회 및 스케일링 권한"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "autoscaling:DescribeTags",
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "eks:DescribeNodegroup"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Service = "eks"
+    Name    = "${local.project}-cluster-autoscaler-policy"
+  }
+}
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name = "${local.project}-cluster-autoscaler-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks_oidc.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Service = "eks"
+    Name    = "${local.project}-cluster-autoscaler-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  role       = aws_iam_role.cluster_autoscaler.name
+  policy_arn = aws_iam_policy.cluster_autoscaler.arn
 }

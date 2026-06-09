@@ -66,10 +66,7 @@ resource "aws_eks_addon" "metrics_server" {
   depends_on = [aws_eks_node_group.ondemand]
 }
 
-# ── Node Group: On-Demand (베이스라인 — 시스템 + 서비스 워크로드) ────────────────
-# 비율 목표: On-Demand 70% : Spot 30%
-# 서비스 Pod는 On-Demand에 우선 스케줄, On-Demand 포화 시 Spot으로 오버플로
-# 피크 트래픽 시 Spot 가용성이 낮아지는 역설을 고려해 On-Demand를 기반으로 확보
+# ── Node Group: On-Demand ──────────────────────────────────────────────────────
 
 resource "aws_eks_node_group" "ondemand" {
   cluster_name    = aws_eks_cluster.fiveline_eks.name
@@ -101,8 +98,10 @@ resource "aws_eks_node_group" "ondemand" {
   }
 
   tags = {
-    Service = "eks"
-    Name    = "${local.project}-ondemand-ng"
+    Service                                                   = "eks"
+    Name                                                      = "${local.project}-ondemand-ng"
+    "k8s.io/cluster-autoscaler/enabled"                       = "true"
+    "k8s.io/cluster-autoscaler/${aws_eks_cluster.fiveline_eks.name}" = "owned"
   }
 
   depends_on = [
@@ -113,55 +112,3 @@ resource "aws_eks_node_group" "ondemand" {
   ]
 }
 
-# ── Node Group: Spot (오버플로 버퍼 — On-Demand 포화 시 확장) ─────────────────
-# 평시 0대, On-Demand 포화 시 최대 2대까지 확장
-# Spot 비율 상한 30% 유지 목적 (On-Demand 4대 : Spot 2대 = 67:33)
-# prod 전환 시 인스턴스 타입 다양화(t3/t3a/m5 계열 혼합) 권장
-
-resource "aws_eks_node_group" "spot" {
-  cluster_name    = aws_eks_cluster.fiveline_eks.name
-  node_group_name = "${local.project}-spot-ng"
-  node_role_arn   = aws_iam_role.eks_node_role.arn
-
-  subnet_ids = [
-    aws_subnet.private_eks_2a.id,
-    aws_subnet.private_eks_2c.id,
-  ]
-
-  ami_type       = "AL2023_x86_64_STANDARD"
-  capacity_type  = "SPOT"
-  instance_types = ["t3.medium", "t3a.medium"]
-  disk_size      = 20
-
-  labels = {
-    workload = "spot"
-  }
-
-  taint {
-    key    = "spot"
-    value  = "true"
-    effect = "NO_SCHEDULE"
-  }
-
-  scaling_config {
-    desired_size = 0
-    min_size     = 0
-    max_size     = 2
-  }
-
-  update_config {
-    max_unavailable_percentage = 50
-  }
-
-  tags = {
-    Service = "eks"
-    Name    = "${local.project}-spot-ng"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_ecr_readonly,
-    aws_iam_role_policy_attachment.eks_ssm,
-  ]
-}

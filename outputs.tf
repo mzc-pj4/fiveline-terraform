@@ -30,10 +30,6 @@ output "eks_ondemand_node_group_name" {
   value = aws_eks_node_group.ondemand.node_group_name
 }
 
-output "eks_spot_node_group_name" {
-  value = aws_eks_node_group.spot.node_group_name
-}
-
 # ── ElastiCache Outputs ───────────────────────────────────────────────────────
 
 output "elasticache_primary_endpoint_address" {
@@ -66,6 +62,12 @@ output "rds_replica_a_endpoint" {
 output "rds_master_username" {
   description = "RDS 마스터 계정명"
   value       = aws_db_instance.rds_primary.username
+}
+
+output "rds_master_password" {
+  description = "RDS 마스터 비밀번호 (terraform이 random 생성)"
+  value       = random_password.rds_master.result
+  sensitive   = true
 }
 
 # ── CloudFront / S3 Outputs ───────────────────────────────────────────────────
