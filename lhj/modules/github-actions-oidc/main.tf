@@ -29,7 +29,10 @@ resource "aws_iam_role" "github_actions" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+          "token.actions.githubusercontent.com:sub" = concat(
+            [for repo in var.github_repos : "repo:${var.github_org}/${repo}:*"],
+            ["repo:${var.github_org}/fiveline-terraform:*"]
+          )
         }
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"

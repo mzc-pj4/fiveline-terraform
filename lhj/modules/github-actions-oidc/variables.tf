@@ -11,9 +11,9 @@ variable "github_org" {
   description = "GitHub organization name (e.g. mzc-pj4)"
 }
 
-variable "github_repo" {
-  type        = string
-  description = "GitHub repository name (e.g. fiveline-backend)"
+variable "github_repos" {
+  type        = list(string)
+  description = "GitHub repository names (e.g. [\"fiveline-backend\", \"fiveline-frontend\"])"
 }
 
 variable "ecr_prefix" {

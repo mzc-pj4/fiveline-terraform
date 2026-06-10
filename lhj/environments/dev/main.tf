@@ -12,8 +12,8 @@ module "network" {
 
 module "ecr" {
   source        = "../../modules/ecr"
-  project_name  = var.project_name
-  service_names = ["user-service", "product-service", "order-service"]
+  project_name  = "fiveline-ecr"
+  service_names = ["user-service", "product-service", "order-service", "frontend"]
 }
 
 module "eks" {
@@ -34,7 +34,7 @@ module "github_actions_oidc" {
   project_name = var.project_name
   environment  = var.environment
   github_org   = "mzc-pj4"
-  github_repo  = "fiveline-backend"
+  github_repos = ["fiveline-backend", "fiveline-frontend"]
   ecr_prefix   = "fiveline-ecr"
 }
 
@@ -50,4 +50,20 @@ module "rds" {
   instance_class      = var.rds_instance_class
   multi_az            = var.rds_multi_az
   deletion_protection = false
+}
+
+resource "null_resource" "argocd" {
+  triggers = {
+    cluster_name = module.eks.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.aws_region}
+      kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+      kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    EOT
+  }
+
+  depends_on = [module.eks]
 }
