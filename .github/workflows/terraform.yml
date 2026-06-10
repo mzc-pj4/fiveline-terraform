@@ -41,6 +41,17 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform fmt -check -recursive
 
+      - name: Debug OIDC token
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          echo $TOKEN | python3 -c "
+          import sys, json, base64
+          token = json.loads(sys.stdin.read())['value']
+          payload = token.split('.')[1]
+          payload += '=' * (4 - len(payload) % 4)
+          print(json.dumps(json.loads(base64.b64decode(payload).decode()), indent=2))
+          "
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
