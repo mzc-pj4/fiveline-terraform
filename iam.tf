@@ -373,6 +373,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Describe 계열은 리소스 수준 제한 미지원 — Resource "*" 불가피
         Effect = "Allow"
         Action = [
           "autoscaling:DescribeAutoScalingGroups",
@@ -380,8 +381,6 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "autoscaling:DescribeLaunchConfigurations",
           "autoscaling:DescribeScalingActivities",
           "autoscaling:DescribeTags",
-          "autoscaling:SetDesiredCapacity",
-          "autoscaling:TerminateInstanceInAutoScalingGroup",
           "ec2:DescribeImages",
           "ec2:DescribeInstanceTypes",
           "ec2:DescribeLaunchTemplateVersions",
@@ -389,6 +388,20 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "eks:DescribeNodegroup"
         ]
         Resource = "*"
+      },
+      {
+        # 스케일링 변경 권한은 이 클러스터 소속 ASG로만 범위 제한
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "autoscaling:ResourceTag/kubernetes.io/cluster/${local.cluster_name}" = "owned"
+          }
+        }
       }
     ]
   })
