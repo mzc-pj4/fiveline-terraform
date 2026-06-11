@@ -139,11 +139,11 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring_attach" {
 # ── RDS Primary Instance (Multi-AZ Standby — HA) ─────────────────────────────
 
 resource "aws_db_instance" "rds_primary" {
-  identifier        = "${local.project}-rds-primary"
-  engine            = "postgres"
-  engine_version    = "16"
-  instance_class    = "db.t3.medium"
-  availability_zone = "ap-northeast-2a"
+  identifier     = "${local.project}-rds-primary"
+  engine         = "postgres"
+  engine_version = "16"
+  instance_class = "db.t3.medium"
+  # Multi-AZ 활성화 시 availability_zone 지정 불가 — AWS가 자동으로 AZ 배치
 
   db_name  = "fiveline"
   username = "fiveline_admin"
@@ -255,6 +255,10 @@ resource "aws_db_instance" "rds_replica_a" {
   backup_retention_period = 0
   skip_final_snapshot     = true
   apply_immediately       = true
+
+  # rds_replica(2c)와 동시 생성 시 Primary가 modifying 상태가 되어 실패
+  # 순차 생성으로 강제
+  depends_on = [aws_db_instance.rds_replica]
 
   tags = {
     Service = "rds"

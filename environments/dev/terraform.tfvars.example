@@ -1,0 +1,22 @@
+project_name = "fiveline"
+environment  = "dev"
+aws_region   = "ap-northeast-2"
+
+cluster_name = "fiveline-dev-eks"
+kubernetes_version = "1.35"
+vpc_cidr     = "10.0.0.0/16"
+
+app_subnet_cidrs = [
+  "10.0.10.0/24",
+  "10.0.11.0/24"
+]
+
+node_instance_types = ["t3.small"]
+node_desired_size   = 2
+node_min_size       = 2
+node_max_size       = 2
+
+db_identifier = "fiveline-dev-rds"
+db_name       = "fiveline"
+db_username   = "postgres"
+db_password   = "replace-with-a-strong-password"
