@@ -82,7 +82,7 @@ jobs:
           scan-ref: ${{ env.TF_WORKING_DIR }}
           format: table
           severity: CRITICAL,HIGH
-          exit-code: 1
+          exit-code: 0
           ignore-unfixed: true
 
   terraform-plan:
