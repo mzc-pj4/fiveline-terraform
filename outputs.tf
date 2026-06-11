@@ -92,6 +92,26 @@ output "s3_frontend_bucket_arn" {
   value       = aws_s3_bucket.frontend.arn
 }
 
+output "frontend_url" {
+  description = "사용자 이커머스 URL"
+  value       = "https://fiveline.store"
+}
+
+output "admin_cloudfront_domain_name" {
+  description = "관리자 대시보드 URL — admin-service CORS 설정에 사용"
+  value       = var.alb_dns_name != "" ? "https://dashboard.fiveline.store" : "ALB 미설정 (2차 apply 후 확인)"
+}
+
+output "cloudfront_waf_arn" {
+  description = "CloudFront WAF ARN"
+  value       = aws_wafv2_web_acl.cloudfront.arn
+}
+
+output "regional_waf_arn" {
+  description = "Regional WAF ARN — ingress.yaml wafv2-web-acl-arn annotation에 주입"
+  value       = aws_wafv2_web_acl.regional.arn
+}
+
 # ── IAM Outputs ───────────────────────────────────────────────────────────────
 
 output "lb_controller_role_arn" {

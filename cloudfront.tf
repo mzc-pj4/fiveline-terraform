@@ -22,17 +22,17 @@ resource "aws_cloudfront_origin_access_control" "frontend_oac" {
   signing_protocol                  = "sigv4"
 }
 
-# ── CloudFront Distribution ───────────────────────────────────────────────────
+# ── CloudFront Distribution (사용자 이커머스) ─────────────────────────────────
 
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Fiveline - S3 frontend + ALB API"
   default_root_object = "index.html"
-  price_class         = "PriceClass_200"  # 한국 포함, 북미/유럽/아시아 엣지 포함
+  price_class         = "PriceClass_200"
+  aliases             = ["fiveline.store"]
 
-  # WAF 연결 — 팀원이 waf_cloudfront.tf 구현 후 var.cloudfront_waf_arn 주입
-  web_acl_id = var.cloudfront_waf_arn
+  web_acl_id = aws_wafv2_web_acl.cloudfront.arn
 
   # ── Origin 1: S3 Frontend (기본) ─────────────────────────────────────────────
   origin {
@@ -51,7 +51,7 @@ resource "aws_cloudfront_distribution" "main" {
       custom_origin_config {
         http_port              = 80
         https_port             = 443
-        origin_protocol_policy = "http-only"  # ALB는 ACM 없이 HTTP. 팀원 ACM 구현 후 https-only로 변경
+        origin_protocol_policy = "http-only"
         origin_ssl_protocols   = ["TLSv1.2"]
       }
     }
@@ -85,6 +85,79 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   # ── SPA 라우팅: React/Vue 등 CSR 앱을 위한 fallback ─────────────────────────
+  # S3 OAC는 존재하지 않는 객체에 대해 404를 반환하므로 404만으로 SPA 라우팅 충분.
+  # 403은 /api/* 경로의 실제 API 에러이므로 변환하지 않음 (변환 시 프론트가 성공으로 인식).
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.fiveline.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    Service = "frontend"
+    Name    = "${local.project}-cloudfront"
+  }
+
+  depends_on = [
+    aws_s3_bucket_public_access_block.frontend,
+    aws_acm_certificate_validation.fiveline,
+  ]
+}
+
+# ── Admin CloudFront Distribution (관리자 대시보드) ───────────────────────────
+# dashboard.fiveline.store → ALB → admin-service
+# WAF IP 화이트리스트로 허가된 IP만 접근 가능
+
+resource "aws_cloudfront_distribution" "admin" {
+  count               = var.alb_dns_name != "" ? 1 : 0
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Fiveline Dashboard - ALB admin-service (HTTPS + IP 제한)"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_200"
+  aliases             = ["dashboard.fiveline.store"]
+
+  web_acl_id = aws_wafv2_web_acl.cloudfront.arn
+
+  # ── Origin: 기존 ALB (admin-service 포함) ────────────────────────────────────
+  origin {
+    domain_name = var.alb_dns_name
+    origin_id   = "alb-admin"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # ── 기본 동작: 모든 요청을 ALB(admin-service)로 전달 ─────────────────────────
+  default_cache_behavior {
+    target_origin_id       = "alb-admin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # CachingDisabled (API/SPA)
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"  # AllViewerExceptHostHeader
+  }
+
+  # ── SPA 라우팅 ────────────────────────────────────────────────────────────────
   custom_error_response {
     error_code            = 403
     response_code         = 200
@@ -99,11 +172,10 @@ resource "aws_cloudfront_distribution" "main" {
     error_caching_min_ttl = 0
   }
 
-  # ── 인증서 설정 ──────────────────────────────────────────────────────────────
-  # 교육용: 실도메인 없이 CloudFront 기본 도메인(*.cloudfront.net) 사용
-  # 실도메인 전환 시: acm_certificate_arn + ssl_support_method = "sni-only" 로 교체
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.fiveline.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   restrictions {
@@ -113,9 +185,12 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = {
-    Service = "frontend"
-    Name    = "${local.project}-cloudfront"
+    Service = "admin"
+    Name    = "${local.project}-admin-cloudfront"
   }
 
-  depends_on = [aws_s3_bucket_public_access_block.frontend]
+  depends_on = [
+    aws_cloudfront_distribution.main,
+    aws_acm_certificate_validation.fiveline,
+  ]
 }

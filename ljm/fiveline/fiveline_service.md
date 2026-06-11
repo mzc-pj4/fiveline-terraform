@@ -16,7 +16,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 ### 2.1 이커머스 애플리케이션 (Workload Source)
 
 - **서비스명**: Fiveline E-Commerce Backend (user / product / order service)
-- **역할 요약**: 회원가입·로그인, 상품 검색/조회, 장바구니, 주문, 리뷰 등 이커머스 핵심 기능을 제공하며 모든 사용자 행동을 **구조화된 이벤트 로그(JSON)** 로 발행한다. 백엔드는 **Python + Flask** 기반이며, DB 마이그레이션은 **Alembic**을 사용한다.
+- **역할 요약**: 회원가입·로그인, 상품 검색/조회, 장바구니, 주문, 리뷰 등 이커머스 핵심 기능을 제공하며 모든 사용자 행동을 **구조화된 이벤트 로그(JSON)** 로 발행한다. 백엔드는 **Python + FastAPI** 기반이며, DB 마이그레이션은 **Alembic**을 사용한다.
 - **왜 필요한가**:
   - 이 서비스가 없으면 **데이터 분석 파이프라인에 흘릴 원천 이벤트 데이터가 존재하지 않는다.** 분석 지표(전환율, 주문 실패율, 검색 키워드)는 모두 이 서비스에서 발생하는 이벤트에 의존한다.
   - 트래픽 부하 시뮬레이션(평상시 95~98% / 프로모션 시 85~90%) 및 장애 시뮬레이션(OUT_OF_STOCK, DB_TIMEOUT, SLOW_RESPONSE)을 통해 **EKS Auto-scaling, RDS 부하, 알람 동작**을 검증하기 위한 필수 워크로드이다.
@@ -33,7 +33,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
   - `infra/` — 인프라 스크립트
   - `platform/` — glue-jobs, grafana-dashboards, lambda (데이터파이프라인/모니터링 팀원 담당)
   - `user-service/` (8001), `product-service/` (8002), `order-service/` (8003)
-  - `admin-service/` (8004, NEW), `notification-service/` (8005, NEW)
+  - `admin-service/` (8004), `notification-service/` (8005)
 - **연관 서비스**: EKS, ALB, RDS, ElastiCache, CloudWatch, Bedrock
 
 ---
@@ -380,13 +380,13 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 | 2 | **EKS Cluster + On-Demand/Spot 노드 그룹 분리 + ALB Ingress** — taint/toleration/nodeSelector 포함 | ✅ 노드 구성 완료 / ALB Ingress 예정 |
 | 3 | **RDS PostgreSQL Multi-AZ(Standby) + Read Replica × 2(2a/2c) + ElastiCache** — 상태 저장소 | ✅ 구현 완료 |
 | 4 | **ECR + GitHub Actions + ArgoCD** — CI/CD 파이프라인 | 📋 예정 |
-| 5 | **이커머스 백엔드 핵심 API**: signup/login, products, cart, orders/from-cart, `/api/health` | ✅ 백엔드 레포 구현 |
-| 6 | **HPA (3개 서비스) + readiness/liveness probe** — Pod 탄력 확장 및 무중단 배포 전제 | ✅ 구현 완료 |
+| 5 | **이커머스 백엔드 5개 서비스**: user/product/order/admin/notification + 운영자 UI | ✅ EKS 배포 완료 (9,997개 상품 데이터 포함) |
+| 6 | **HPA (5개 서비스) + readiness/liveness probe** — Pod 탄력 확장 및 무중단 배포 전제 | ✅ 구현 완료 |
 | 7 | **Cluster Autoscaler 또는 Karpenter** — HPA Pod 증가 시 노드까지 자동 확장. 70:30 비율 실현의 필수 전제 | 📋 예정 |
-| 8 | **PodDisruptionBudget (PDB)** — Spot 회수/노드 드레인 시 최소 1 Pod 보장 | 📋 예정 |
-| 9 | **CloudWatch Logs + Firehose + S3 Data Lake + Glue + Athena** — 이벤트 분석 파이프라인 | 📋 예정 |
-| 10 | **IAM (IRSA) + External Secrets Operator + Secrets Manager + KMS + ACM** — 보안 베이스라인 | 🔄 진행 중 |
-| 11 | **CloudFront + S3 Frontend + Route53 + WAF (REGIONAL/CLOUDFRONT 분리)** — 사용자 진입점 | 📋 예정 |
+| 8 | **PodDisruptionBudget (PDB)** — Spot 회수/노드 드레인 시 최소 1 Pod 보장 | ✅ K8s manifest 구현 완료 |
+| 9 | **CloudWatch Logs + Firehose + S3 Data Lake + Glue + Athena** — 이벤트 분석 파이프라인 | 📋 예정 (데이터파이프라인 담당) |
+| 10 | **IAM (IRSA) + External Secrets Operator + Secrets Manager + KMS + ACM** — 보안 베이스라인 | 🔄 OIDC Provider 완료 / ESO·Secrets Manager 미구현 |
+| 11 | **CloudFront + S3 Frontend** — 사용자 진입점 (WAF는 별도 적용 예정) | ✅ 구현 완료 (d330d0cjfkz4e7.cloudfront.net) |
 | 12 | **Terraform S3 Remote Backend + DynamoDB Lock** — 팀 협업 State 관리 | 📋 예정 |
 
 ### Should Have (2차 — 운영 안정성 및 분석 고도화)
@@ -417,7 +417,7 @@ Fiveline 프로젝트는 무신사, 올리브영과 같이 트래픽이 많은 �
 
 | # | 영역 | 대표 서비스 | 산출물 |
 |---|------|-------------|--------|
-| 1 | 이커머스 애플리케이션 | EKS Pod (Python/Flask MSA) | 서비스 이벤트 로그 |
+| 1 | 이커머스 애플리케이션 | EKS Pod (Python/FastAPI MSA) | 서비스 이벤트 로그 |
 | 2 | 컨테이너 인프라 | EKS + ALB + ArgoCD | 무중단 배포된 워크로드 |
 | 3 | 데이터 수집/분석 | CloudWatch → Firehose → S3 → Glue → Athena | 분석 지표 |
 | 4 | 모니터링/알람 | CloudWatch + SNS + Lambda + DynamoDB + Grafana | 알람 이력, CloudWatch + Grafana 대시보드 |

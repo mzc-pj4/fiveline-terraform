@@ -109,6 +109,10 @@ resource "aws_instance" "bastion" {
 
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
 
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
   user_data = base64encode(<<-EOF
     #!/bin/bash
     set -e

@@ -9,9 +9,3 @@ variable "alb_dns_name" {
   type        = string
   default     = ""
 }
-
-variable "cloudfront_waf_arn" {
-  description = "CloudFront용 WAF WebACL ARN (us-east-1) — 팀원이 waf_cloudfront.tf 구현 후 주입"
-  type        = string
-  default     = null
-}
