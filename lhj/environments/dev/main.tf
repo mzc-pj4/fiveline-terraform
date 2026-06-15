@@ -36,6 +36,7 @@ module "github_actions_oidc" {
   github_org   = "mzc-pj4"
   github_repos = ["fiveline-backend", "fiveline-frontend"]
   ecr_prefix   = "fiveline-ecr"
+  # bedrock invoke policy added for AIOps
 }
 
 module "rds" {
