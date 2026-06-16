@@ -106,6 +106,41 @@ resource "aws_cloudfront_function" "api_error_handler" {
   EOT
 }
 
+# ── CloudFront 액세스 로그 전용 S3 버킷 ──────────────────────────────────────
+# SEC: 누가 언제 어떤 URL에 접근했는지 기록 — 관리자 대시보드 접근 감사용
+# CloudFront 로그는 ACL log-delivery-write 방식으로 버킷에 씀 (OAC 미지원)
+
+resource "aws_s3_bucket" "cloudfront_logs" {
+  bucket        = "${local.project}-cloudfront-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+
+  tags = {
+    Service = "frontend"
+    Name    = "${local.project}-cloudfront-logs"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"  # ACL 활성화 전제 조건
+  }
+}
+
+resource "aws_s3_bucket_acl" "cloudfront_logs" {
+  bucket     = aws_s3_bucket.cloudfront_logs.id
+  acl        = "log-delivery-write"  # CloudFront가 로그를 버킷에 쓰기 위해 필요
+  depends_on = [aws_s3_bucket_ownership_controls.cloudfront_logs]
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
+  bucket                  = aws_s3_bucket.cloudfront_logs.id
+  block_public_acls       = false  # log-delivery-write ACL 허용을 위해 false
+  block_public_policy     = true
+  ignore_public_acls      = false
+  restrict_public_buckets = true
+}
+
 # ── Origin Access Control (S3 → CloudFront 서명 인증) ─────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "frontend_oac" {
@@ -219,6 +254,12 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "main/"
+  }
+
   tags = {
     Service = "frontend"
     Name    = "${local.project}-cloudfront"
@@ -227,6 +268,7 @@ resource "aws_cloudfront_distribution" "main" {
   depends_on = [
     aws_s3_bucket_public_access_block.frontend,
     aws_acm_certificate_validation.fiveline,
+    aws_s3_bucket_acl.cloudfront_logs,
   ]
 }
 
@@ -304,6 +346,12 @@ resource "aws_cloudfront_distribution" "admin" {
     }
   }
 
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "admin/"
+  }
+
   tags = {
     Service = "admin"
     Name    = "${local.project}-admin-cloudfront"
@@ -312,5 +360,6 @@ resource "aws_cloudfront_distribution" "admin" {
   depends_on = [
     aws_cloudfront_distribution.main,
     aws_acm_certificate_validation.fiveline,
+    aws_s3_bucket_acl.cloudfront_logs,
   ]
 }

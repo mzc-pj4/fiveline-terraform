@@ -22,6 +22,14 @@ resource "aws_s3_bucket" "cloudtrail" {
   }
 }
 
+# SEC: CloudTrail 버킷 자체 접근 감사 — 무단 열람/삭제 시도 탐지
+# log-delivery-write ACL이 있는 cloudfront_logs 버킷을 공용 액세스 로그 버킷으로 재활용
+resource "aws_s3_bucket_logging" "cloudtrail" {
+  bucket        = aws_s3_bucket.cloudtrail.id
+  target_bucket = aws_s3_bucket.cloudfront_logs.id
+  target_prefix = "s3-access/cloudtrail/"
+}
+
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
 
