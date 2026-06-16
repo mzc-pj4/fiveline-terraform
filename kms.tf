@@ -142,6 +142,21 @@ resource "aws_kms_key" "secrets_manager" {
           "kms:CreateGrant"
         ]
         Resource = "*"
+      },
+      {
+        # SEC: SNS 토픽 암호화 + EventBridge → SNS Publish 시 복호화 허용
+        Sid    = "SNSAndEventBridgeUse"
+        Effect = "Allow"
+        Principal = {
+          Service = ["sns.amazonaws.com", "events.amazonaws.com"]
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })

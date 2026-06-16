@@ -100,6 +100,22 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
             "s3:x-amz-acl" = "bucket-owner-full-control"
           }
         }
+      },
+      {
+        # SEC: HTTP 전송 명시적 차단 — 전송 중 암호화 강제 (HTTPS-only)
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [
+          aws_s3_bucket.cloudtrail.arn,
+          "${aws_s3_bucket.cloudtrail.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
       }
     ]
   })
@@ -173,17 +189,24 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ]
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
+      },
+      {
+        # SEC: DescribeLogGroups는 AWS IAM 리소스 레벨 권한 미지원 — Resource "*" 불가피
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogGroups"]
+        Resource = "*"
+      }
+    ]
   })
 }
 

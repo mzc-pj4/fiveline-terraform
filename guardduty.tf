@@ -43,7 +43,8 @@ resource "aws_guardduty_detector" "fiveline" {
 # ── SNS 토픽 (보안 알림 수신) ─────────────────────────────────────────────────
 
 resource "aws_sns_topic" "security_alerts" {
-  name = "${local.project}-security-alerts"
+  name              = "${local.project}-security-alerts"
+  kms_master_key_id = aws_kms_key.secrets_manager.arn  # SEC: 보안 알림 전송 중 암호화
 
   tags = {
     Service = "guardduty"

@@ -149,10 +149,11 @@ resource "aws_iam_instance_profile" "bastion_profile" {
 # EKS: endpoint_public_access=true이므로 aws eks update-kubeconfig 후 kubectl 사용 가능
 
 resource "aws_instance" "bastion" {
-  ami                  = data.aws_ami.al2023.id
-  instance_type        = "t3.micro"
-  subnet_id            = aws_subnet.private_bastion_2a.id
-  iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
+  ami                         = data.aws_ami.al2023.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.private_bastion_2a.id
+  iam_instance_profile        = aws_iam_instance_profile.bastion_profile.name
+  associate_public_ip_address = false  # SEC: private subnet 배치, SSM 접속 전용
 
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
 

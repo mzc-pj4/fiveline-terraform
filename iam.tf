@@ -373,7 +373,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Describe 계열은 리소스 수준 제한 미지원 — Resource "*" 불가피
+        # SEC: Describe 계열은 AWS IAM 리소스 레벨 권한 미지원 — Resource "*" 불가피
         Effect = "Allow"
         Action = [
           "autoscaling:DescribeAutoScalingGroups",
@@ -384,10 +384,15 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "ec2:DescribeImages",
           "ec2:DescribeInstanceTypes",
           "ec2:DescribeLaunchTemplateVersions",
-          "ec2:GetInstanceTypesFromInstanceRequirements",
-          "eks:DescribeNodegroup"
+          "ec2:GetInstanceTypesFromInstanceRequirements"
         ]
         Resource = "*"
+      },
+      {
+        # SEC: eks:DescribeNodegroup은 특정 클러스터 ARN으로 범위 제한 가능
+        Effect = "Allow"
+        Action = ["eks:DescribeNodegroup"]
+        Resource = "arn:aws:eks:ap-northeast-2:${data.aws_caller_identity.current.account_id}:nodegroup/${local.cluster_name}/*"
       },
       {
         # 스케일링 변경 권한은 이 클러스터 소속 ASG로만 범위 제한
@@ -396,7 +401,8 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "autoscaling:SetDesiredCapacity",
           "autoscaling:TerminateInstanceInAutoScalingGroup"
         ]
-        Resource = "*"
+        # SEC: ASG ARN 패턴으로 범위 제한 + Condition으로 이중 제한
+        Resource = "arn:aws:autoscaling:ap-northeast-2:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/*"
         Condition = {
           StringEquals = {
             "autoscaling:ResourceTag/kubernetes.io/cluster/${local.cluster_name}" = "owned"

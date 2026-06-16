@@ -84,6 +84,10 @@ resource "aws_eks_addon" "metrics_server" {
 resource "aws_launch_template" "eks_nodes" {
   name_prefix = "${local.project}-eks-node-"
 
+  network_interfaces {
+    associate_public_ip_address = false  # SEC: private subnet 배치, 퍼블릭 IP 할당 명시적 차단
+  }
+
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"  # IMDSv2 강제
