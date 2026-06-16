@@ -95,7 +95,7 @@ resource "aws_launch_template" "eks_nodes" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size           = 20
+      volume_size           = 30
       volume_type           = "gp3"
       encrypted             = true
       delete_on_termination = true
@@ -141,9 +141,9 @@ resource "aws_eks_node_group" "ondemand" {
   }
 
   scaling_config {
-    desired_size = 2
-    min_size     = 2
-    max_size     = 6
+    desired_size = 4
+    min_size     = 3
+    max_size     = 8
   }
 
   update_config {

@@ -106,7 +106,7 @@ resource "aws_db_parameter_group" "rds_pg16" {
 
   parameter {
     name         = "pgaudit.log_relation"
-    value        = "on"
+    value        = "1"
     apply_method = "pending-reboot"
   }
 

@@ -58,6 +58,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "cloudtrail-retention"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 90
       storage_class = "GLACIER_IR"
