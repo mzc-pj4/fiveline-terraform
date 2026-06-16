@@ -423,7 +423,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler-aws-cluster-autoscaler"
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
         }
       }
@@ -440,3 +440,185 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   role       = aws_iam_role.cluster_autoscaler.name
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
 }
+
+# ── 앱 서비스 IRSA (Pod 수준 최소 권한) ──────────────────────────────────────
+# SEC: Node Role은 EKS 인프라 운영에만 사용 — 앱 비즈니스 로직 권한 분리
+# IRSA 없이 앱을 실행하면 Node의 과도한 Role이 모든 Pod에 상속됨 (Blast Radius 전체)
+# 서비스별 독립 Role → 하나의 Pod가 침해되어도 다른 서비스 AWS 리소스 접근 불가
+#
+# ESO가 DB 자격증명/JWT 키를 K8s Secret으로 동기화하므로
+# 각 앱 SA는 서비스 특화 AWS 리소스만 접근 (Secrets Manager 직접 접근 불필요)
+#
+# namespace: production (K8s 네임스페이스)
+
+locals {
+  app_services = {
+    user    = { namespace = "production", sa = "user-sa" }
+    product = { namespace = "production", sa = "product-sa" }
+    order   = { namespace = "production", sa = "order-sa" }
+    admin   = { namespace = "production", sa = "admin-sa" }
+  }
+}
+
+# 공통 IRSA Trust Policy 생성 (서비스 어카운트 → IAM Role)
+resource "aws_iam_role" "app_service" {
+  for_each = local.app_services
+  name     = "${local.project}-${each.key}-sa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks_oidc.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:sub" = "system:serviceaccount:${each.value.namespace}:${each.value.sa}"
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Service = each.key
+    Name    = "${local.project}-${each.key}-sa-role"
+  }
+}
+
+# ── user-service: SES 이메일 발송 (이메일 인증, 비밀번호 재설정) ──────────────
+
+resource "aws_iam_policy" "user_service" {
+  name        = "${local.project}-user-service-policy"
+  description = "user-service: SES 이메일 발송 (fiveline.store 도메인)"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Resource = "arn:aws:ses:ap-northeast-2:${data.aws_caller_identity.current.account_id}:identity/fiveline.store"
+    }]
+  })
+
+  tags = {
+    Service = "user"
+    Name    = "${local.project}-user-service-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "user_service" {
+  role       = aws_iam_role.app_service["user"].name
+  policy_arn = aws_iam_policy.user_service.arn
+}
+
+# ── product-service: S3 상품 이미지 업로드/조회 ───────────────────────────────
+
+resource "aws_iam_policy" "product_service" {
+  name        = "${local.project}-product-service-policy"
+  description = "product-service: S3 프론트엔드 버킷 product-images/ 읽기/쓰기"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.frontend.arn}/product-images/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.frontend.arn
+        Condition = {
+          StringLike = { "s3:prefix" = ["product-images/*"] }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Service = "product"
+    Name    = "${local.project}-product-service-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "product_service" {
+  role       = aws_iam_role.app_service["product"].name
+  policy_arn = aws_iam_policy.product_service.arn
+}
+
+# ── order-service: SNS 주문 이벤트 발행 ──────────────────────────────────────
+
+resource "aws_iam_policy" "order_service" {
+  name        = "${local.project}-order-service-policy"
+  description = "order-service: SNS Publish (주문 상태 이벤트)"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sns:Publish"]
+      Resource = "arn:aws:sns:ap-northeast-2:${data.aws_caller_identity.current.account_id}:${local.project}-*"
+    }]
+  })
+
+  tags = {
+    Service = "order"
+    Name    = "${local.project}-order-service-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "order_service" {
+  role       = aws_iam_role.app_service["order"].name
+  policy_arn = aws_iam_policy.order_service.arn
+}
+
+# ── admin-service: CloudWatch 메트릭/로그 읽기 (대시보드) ─────────────────────
+
+resource "aws_iam_policy" "admin_service" {
+  name        = "${local.project}-admin-service-policy"
+  description = "admin-service: CloudWatch 읽기 전용 (대시보드 메트릭 조회)"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # CloudWatch 메트릭 조회 — 메트릭 액션은 ARN 기반 제한 불가 (AWS 설계 특성)
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics"
+        ]
+        Resource = "*"
+      },
+      {
+        # SEC: 로그 조회는 fiveline 관련 로그 그룹으로 범위 제한 (최소 권한)
+        Effect = "Allow"
+        Action = [
+          "logs:FilterLogEvents",
+          "logs:GetLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = [
+          "arn:aws:logs:ap-northeast-2:*:log-group:/aws/eks/${local.cluster_name}*:*",
+          "arn:aws:logs:ap-northeast-2:*:log-group:aws-waf-logs-${local.project}*:*",
+          "arn:aws:logs:ap-northeast-2:*:log-group:/aws/vpc/flowlogs/${local.project}:*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Service = "admin"
+    Name    = "${local.project}-admin-service-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "admin_service" {
+  role       = aws_iam_role.app_service["admin"].name
+  policy_arn = aws_iam_policy.admin_service.arn
+}
+

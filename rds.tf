@@ -21,13 +21,8 @@ resource "aws_security_group" "rds_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  egress {
-    description = "Allow internal VPC traffic only (least privilege)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.10.0.0/16"]
-  }
+  # SEC: egress 룰 없음 — SG는 stateful이므로 ingress에 대한 응답 트래픽은 자동 허용
+  # RDS는 어떤 아웃바운드 연결도 개시하지 않으므로 egress 불필요
 
   tags = {
     Service = "rds"
@@ -50,11 +45,34 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 
 # ── RDS Master Password ───────────────────────────────────────────────────────
 # manage_master_user_password = true는 Read Replica 생성과 호환되지 않음 (AWS 제약)
-# random_password로 생성 후 보안 담당자가 Secrets Manager에 등록
+# random_password로 생성 후 Terraform이 Secrets Manager에 자동 저장
 
 resource "random_password" "rds_master" {
   length  = 20
   special = false  # PostgreSQL 연결 문자열 파싱 오류 방지
+}
+
+resource "aws_secretsmanager_secret" "rds_master" {
+  name                    = "fiveline-rds-master-password"
+  description             = "RDS master password for fiveline PostgreSQL"
+  kms_key_id              = aws_kms_key.secrets_manager.arn
+  recovery_window_in_days = 0
+
+  tags = {
+    Service = "rds"
+    Name    = "${local.project}-rds-master-password"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id = aws_secretsmanager_secret.rds_master.id
+  secret_string = jsonencode({
+    username = "fiveline_admin"
+    password = random_password.rds_master.result
+    host     = aws_db_instance.rds_primary.address
+    port     = 5432
+    dbname   = "fiveline"
+  })
 }
 
 # ── RDS Parameter Group (PostgreSQL 16) ──────────────────────────────────────
@@ -72,10 +90,23 @@ resource "aws_db_parameter_group" "rds_pg16" {
     apply_method = "immediate"
   }
 
-  # Top SQL 수집 — Performance Insights 연계 (static: 재시작 필요)
+  # Top SQL 수집 + PII 감사 — pgaudit 추가 (SEC: 내부자 위협/PIPA 접근 기록 의무)
   parameter {
     name         = "shared_preload_libraries"
-    value        = "pg_stat_statements,auto_explain"
+    value        = "pg_stat_statements,auto_explain,pgaudit"
+    apply_method = "pending-reboot"
+  }
+
+  # pgaudit: 누가 언제 어떤 데이터를 조회/수정했는지 기록 (PIPA 제29조 준수)
+  parameter {
+    name         = "pgaudit.log"
+    value        = "read,write,ddl"
+    apply_method = "pending-reboot"
+  }
+
+  parameter {
+    name         = "pgaudit.log_relation"
+    value        = "on"
     apply_method = "pending-reboot"
   }
 
@@ -153,6 +184,7 @@ resource "aws_db_instance" "rds_primary" {
   max_allocated_storage = 100
   storage_type          = "gp3"
   storage_encrypted     = true
+  kms_key_id            = aws_kms_key.rds.arn  # SEC: CMK로 스토리지/스냅샷 암호화
 
   # Multi-AZ Standby — Primary 장애 시 자동 페일오버 (RPO≈0, HA 목적)
   multi_az = true
@@ -181,9 +213,10 @@ resource "aws_db_instance" "rds_primary" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
 
-  deletion_protection = false  # 교육용: 삭제 방지 비활성
-  skip_final_snapshot = true   # 교육용: 최종 스냅샷 생략
-  apply_immediately   = true
+  deletion_protection       = true   # SEC: 랜섬웨어/실수로 인한 DB 삭제 방지
+  skip_final_snapshot       = false  # SEC: 삭제 전 최종 스냅샷 강제 생성
+  final_snapshot_identifier = "${local.project}-rds-primary-final"
+  apply_immediately         = true
 
   tags = {
     Service = "rds"
