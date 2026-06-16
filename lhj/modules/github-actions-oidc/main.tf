@@ -93,3 +93,21 @@ resource "aws_iam_role_policy" "eks" {
     }]
   })
 }
+
+# ────────────────────────────────────────────────
+# Policy — Bedrock (AIOps)
+# ────────────────────────────────────────────────
+resource "aws_iam_role_policy" "bedrock" {
+  name = "bedrock-invoke-policy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "BedrockInvoke"
+      Effect = "Allow"
+      Action = ["bedrock:InvokeModel"]
+      Resource = "arn:aws:bedrock:${local.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+    }]
+  })
+}
