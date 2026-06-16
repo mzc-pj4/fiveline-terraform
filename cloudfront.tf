@@ -120,25 +120,49 @@ resource "aws_s3_bucket" "cloudfront_logs" {
   }
 }
 
-resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
-  bucket = aws_s3_bucket.cloudfront_logs.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"  # ACL 활성화 전제 조건
-  }
-}
-
-resource "aws_s3_bucket_acl" "cloudfront_logs" {
-  bucket     = aws_s3_bucket.cloudfront_logs.id
-  acl        = "log-delivery-write"  # CloudFront가 로그를 버킷에 쓰기 위해 필요
-  depends_on = [aws_s3_bucket_ownership_controls.cloudfront_logs]
-}
-
 resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
   bucket                  = aws_s3_bucket.cloudfront_logs.id
-  block_public_acls       = false  # log-delivery-write ACL 허용을 위해 false
+  block_public_acls       = true
   block_public_policy     = true
-  ignore_public_acls      = false
+  ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# SEC: CloudFront 서비스 프린시펄 방식 (ACL 대신 버킷 정책) — block_public_acls=true 유지 가능
+# delivery.logs.amazonaws.com이 PutObject 수행 + DenyHTTP로 HTTPS-only 강제
+resource "aws_s3_bucket_policy" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontLogDelivery"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudfront_logs.arn}/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      {
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [
+          aws_s3_bucket.cloudfront_logs.arn,
+          "${aws_s3_bucket.cloudfront_logs.arn}/*"
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.cloudfront_logs]
 }
 
 # ── Origin Access Control (S3 → CloudFront 서명 인증) ─────────────────────────
