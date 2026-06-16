@@ -26,8 +26,8 @@ resource "aws_s3_bucket" "cloudtrail" {
 # log-delivery-write ACL이 있는 cloudfront_logs 버킷을 공용 액세스 로그 버킷으로 재활용
 resource "aws_s3_bucket_logging" "cloudtrail" {
   bucket        = aws_s3_bucket.cloudtrail.id
-  target_bucket = aws_s3_bucket.cloudfront_logs.id
-  target_prefix = "s3-access/cloudtrail/"
+  target_bucket = aws_s3_bucket.cloudtrail.id
+  target_prefix = "s3-access/"
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
@@ -94,6 +94,17 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        # SEC: CloudFront 액세스 로그를 cloudtrail 버킷에 통합 저장 (cloudfront/ prefix)
+        Sid    = "AllowCloudFrontLogDelivery"
+        Effect = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/cloudfront/*"
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
       },
       {
         Sid    = "AWSCloudTrailWrite"

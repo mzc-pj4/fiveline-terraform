@@ -106,65 +106,6 @@ resource "aws_cloudfront_function" "api_error_handler" {
   EOT
 }
 
-# ── CloudFront 액세스 로그 전용 S3 버킷 ──────────────────────────────────────
-# SEC: 누가 언제 어떤 URL에 접근했는지 기록 — 관리자 대시보드 접근 감사용
-# CloudFront 로그는 ACL log-delivery-write 방식으로 버킷에 씀 (OAC 미지원)
-
-resource "aws_s3_bucket" "cloudfront_logs" {
-  bucket        = "${local.project}-cloudfront-logs-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
-
-  tags = {
-    Service = "frontend"
-    Name    = "${local.project}-cloudfront-logs"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
-  bucket                  = aws_s3_bucket.cloudfront_logs.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# SEC: CloudFront 서비스 프린시펄 방식 (ACL 대신 버킷 정책) — block_public_acls=true 유지 가능
-# delivery.logs.amazonaws.com이 PutObject 수행 + DenyHTTP로 HTTPS-only 강제
-resource "aws_s3_bucket_policy" "cloudfront_logs" {
-  bucket = aws_s3_bucket.cloudfront_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowCloudFrontLogDelivery"
-        Effect = "Allow"
-        Principal = { Service = "delivery.logs.amazonaws.com" }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudfront_logs.arn}/*"
-        Condition = {
-          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
-        }
-      },
-      {
-        Sid       = "DenyHTTP"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource  = [
-          aws_s3_bucket.cloudfront_logs.arn,
-          "${aws_s3_bucket.cloudfront_logs.arn}/*"
-        ]
-        Condition = {
-          Bool = { "aws:SecureTransport" = "false" }
-        }
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.cloudfront_logs]
-}
-
 # ── Origin Access Control (S3 → CloudFront 서명 인증) ─────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "frontend_oac" {
@@ -280,8 +221,8 @@ resource "aws_cloudfront_distribution" "main" {
 
   logging_config {
     include_cookies = false
-    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
-    prefix          = "main/"
+    bucket          = aws_s3_bucket.cloudtrail.bucket_domain_name
+    prefix          = "cloudfront/main/"
   }
 
   tags = {
@@ -292,7 +233,6 @@ resource "aws_cloudfront_distribution" "main" {
   depends_on = [
     aws_s3_bucket_public_access_block.frontend,
     aws_acm_certificate_validation.fiveline,
-    aws_s3_bucket_acl.cloudfront_logs,
   ]
 }
 
@@ -372,8 +312,8 @@ resource "aws_cloudfront_distribution" "admin" {
 
   logging_config {
     include_cookies = false
-    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
-    prefix          = "admin/"
+    bucket          = aws_s3_bucket.cloudtrail.bucket_domain_name
+    prefix          = "cloudfront/admin/"
   }
 
   tags = {
@@ -384,6 +324,5 @@ resource "aws_cloudfront_distribution" "admin" {
   depends_on = [
     aws_cloudfront_distribution.main,
     aws_acm_certificate_validation.fiveline,
-    aws_s3_bucket_acl.cloudfront_logs,
   ]
 }
