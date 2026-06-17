@@ -53,27 +53,6 @@ module "rds" {
   deletion_protection = false
 }
 
-resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
-  name = "dynamodb-aiops-read-policy"
-  role = "fiveline-admin-service-sa-role"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "DynamoDBRead"
-      Effect = "Allow"
-      Action = [
-        "dynamodb:Query",
-        "dynamodb:Scan",
-        "dynamodb:GetItem",
-      ]
-      Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/fiveline-${var.environment}-aiops-canary-logs"
-    }]
-  })
-}
-
-data "aws_caller_identity" "current" {}
-
 resource "null_resource" "argocd" {
   triggers = {
     cluster_name = module.eks.cluster_name
