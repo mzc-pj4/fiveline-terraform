@@ -10,8 +10,14 @@ variable "alb_dns_name" {
   default     = ""
 }
 
-variable "cloudfront_waf_arn" {
-  description = "CloudFront용 WAF WebACL ARN (us-east-1) — 팀원이 waf_cloudfront.tf 구현 후 주입"
+variable "security_alert_email" {
+  description = "GuardDuty 보안 알림 수신 이메일 주소"
   type        = string
-  default     = null
+  default     = "lljjmm1010@gmail.com"
+}
+
+variable "admin_allowed_cidrs" {
+  description = "관리자 대시보드(dashboard.fiveline.store) 접근 허용 IP 대역 (CIDR 리스트). 비어있으면 IP 제한 없음."
+  type        = list(string)
+  default     = []
 }

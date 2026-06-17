@@ -21,14 +21,8 @@ resource "aws_security_group" "elasticache_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  # RDS SG와 동일하게 least privilege 적용 (SEC-004)
-  egress {
-    description = "Allow internal VPC traffic only (least privilege)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["10.10.0.0/16"]
-  }
+  # SEC: egress 룰 없음 — SG는 stateful이므로 ingress에 대한 응답 트래픽은 자동 허용
+  # ElastiCache는 어떤 아웃바운드 연결도 개시하지 않으므로 egress 불필요
 
   tags = {
     Service = "cache"
@@ -62,6 +56,12 @@ resource "aws_elasticache_parameter_group" "cache_params" {
   }
 }
 
+# Redis AUTH 토큰 — Terraform이 생성, Secrets Manager에도 별도 등록 권장
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = false  # ElastiCache AUTH 토큰 특수문자 제한 (@, ",", / 불가)
+}
+
 # ── ElastiCache Replication Group (Redis Cluster) ─────────────────────────────
 
 resource "aws_elasticache_replication_group" "redis_cluster" {
@@ -75,9 +75,11 @@ resource "aws_elasticache_replication_group" "redis_cluster" {
   num_cache_clusters         = 2
   automatic_failover_enabled = true
 
-  # 보안 설정 — 저장/전송 데이터 암호화 (SEC-010, SEC-011)
+  # SEC: 저장/전송 암호화 + AUTH 토큰 (transit_encryption=true 필수)
+  # auth_token 없으면 EKS 내 어떤 Pod이든 6379 무인증 접근 가능 — SEC-012
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth_token.result
 
   port = 6379
 

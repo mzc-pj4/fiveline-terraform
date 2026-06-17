@@ -30,10 +30,6 @@ output "eks_ondemand_node_group_name" {
   value = aws_eks_node_group.ondemand.node_group_name
 }
 
-output "eks_spot_node_group_name" {
-  value = aws_eks_node_group.spot.node_group_name
-}
-
 # ── ElastiCache Outputs ───────────────────────────────────────────────────────
 
 output "elasticache_primary_endpoint_address" {
@@ -68,6 +64,12 @@ output "rds_master_username" {
   value       = aws_db_instance.rds_primary.username
 }
 
+output "rds_master_password" {
+  description = "RDS 마스터 비밀번호 (terraform이 random 생성)"
+  value       = random_password.rds_master.result
+  sensitive   = true
+}
+
 # ── CloudFront / S3 Outputs ───────────────────────────────────────────────────
 
 output "cloudfront_domain_name" {
@@ -88,6 +90,26 @@ output "s3_frontend_bucket" {
 output "s3_frontend_bucket_arn" {
   description = "프론트엔드 S3 버킷 ARN"
   value       = aws_s3_bucket.frontend.arn
+}
+
+output "frontend_url" {
+  description = "사용자 이커머스 URL"
+  value       = "https://fiveline.store"
+}
+
+output "admin_cloudfront_domain_name" {
+  description = "관리자 대시보드 URL — admin-service CORS 설정에 사용"
+  value       = var.alb_dns_name != "" ? "https://dashboard.fiveline.store" : "ALB 미설정 (2차 apply 후 확인)"
+}
+
+output "cloudfront_waf_arn" {
+  description = "CloudFront WAF ARN"
+  value       = aws_wafv2_web_acl.cloudfront.arn
+}
+
+output "regional_waf_arn" {
+  description = "Regional WAF ARN — ingress.yaml wafv2-web-acl-arn annotation에 주입"
+  value       = aws_wafv2_web_acl.regional.arn
 }
 
 # ── IAM Outputs ───────────────────────────────────────────────────────────────
