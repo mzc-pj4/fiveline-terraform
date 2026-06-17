@@ -1,0 +1,1 @@
+{"function":"query_athena","parameters":[{"name":"sql","value":"SELECT COUNT(*) AS cnt FROM service_events"}]}

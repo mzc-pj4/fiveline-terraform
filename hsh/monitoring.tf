@@ -1,158 +1,13 @@
-# ══════════════════════════════════════════════
-# CloudWatch Dashboard — fiveline-dashboard
-# 골든 시그널 4행: Latency / Traffic / Errors / Saturation
-# ══════════════════════════════════════════════
-resource "aws_cloudwatch_dashboard" "fiveline" {
-  dashboard_name = "fiveline-dashboard"
-
-  dashboard_body = jsonencode({
-    widgets = [
-
-      # ── Row 1: Latency ─────────────────────────────────────
-      { type = "text", x = 0, y = 0, width = 24, height = 1
-        properties = { markdown = "## Latency" } },
-
-      { type = "metric", x = 0, y = 1, width = 12, height = 6
-        properties = {
-          title = "ALB 응답시간 P50 / P95 / P99"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 60
-          metrics = [
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, { stat = "p50", label = "P50" }],
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, { stat = "p95", label = "P95" }],
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, { stat = "p99", label = "P99", color = "#d62728" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 12, y = 1, width = 12, height = 6
-        properties = {
-          title = "RDS 쓰기 지연 / Replica Lag (초)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            ["AWS/RDS", "WriteLatency", "DBInstanceIdentifier", var.rds_instance_id, { stat = "Average", label = "WriteLatency" }],
-            ["AWS/RDS", "ReplicaLag", "DBInstanceIdentifier", var.rds_instance_id, { stat = "Maximum", label = "ReplicaLag" }]
-          ]
-        }
-      },
-
-      # ── Row 2: Traffic ─────────────────────────────────────
-      { type = "text", x = 0, y = 7, width = 24, height = 1
-        properties = { markdown = "## Traffic" } },
-
-      { type = "metric", x = 0, y = 8, width = 12, height = 6
-        properties = {
-          title = "ALB 요청 수 (RPS)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 60
-          metrics = [
-            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, { stat = "Sum", label = "RequestCount" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 12, y = 8, width = 12, height = 6
-        properties = {
-          title = "RDS 동시 접속 수"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", var.rds_instance_id, { stat = "Maximum", label = "Connections" }]
-          ]
-        }
-      },
-
-      # ── Row 3: Errors ──────────────────────────────────────
-      { type = "text", x = 0, y = 14, width = 24, height = 1
-        properties = { markdown = "## Errors" } },
-
-      { type = "metric", x = 0, y = 15, width = 12, height = 6
-        properties = {
-          title = "ALB 5xx 에러율 (%)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            [{ expression = "m1/m2*100", label = "5xx Rate (%)", id = "error_rate" }],
-            ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", var.alb_arn_suffix, { id = "m1", visible = false, stat = "Sum" }],
-            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, { id = "m2", visible = false, stat = "Sum" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 12, y = 15, width = 12, height = 6
-        properties = {
-          title = "Pod 재시작 횟수"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            ["ContainerInsights", "pod_number_of_container_restarts", "ClusterName", var.eks_cluster_name, { stat = "Maximum", label = "PodRestarts" }]
-          ]
-        }
-      },
-
-      # ── Row 4: Saturation ──────────────────────────────────
-      { type = "text", x = 0, y = 21, width = 24, height = 1
-        properties = { markdown = "## Saturation" } },
-
-      { type = "metric", x = 0, y = 22, width = 6, height = 6
-        properties = {
-          title = "EKS 클러스터 CPU (%)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            ["ContainerInsights", "cluster_cpu_utilization", "ClusterName", var.eks_cluster_name, { stat = "Average", label = "CPU %" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 6, y = 22, width = 6, height = 6
-        properties = {
-          title = "Redis Hit Rate (%)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            [{ expression = "m1/(m1+m2)*100", label = "Hit Rate (%)", id = "hit_rate" }],
-            ["AWS/ElastiCache", "GetHits", "ReplicationGroupId", var.redis_replication_group_id, { id = "m1", visible = false, stat = "Sum" }],
-            ["AWS/ElastiCache", "GetMisses", "ReplicationGroupId", var.redis_replication_group_id, { id = "m2", visible = false, stat = "Sum" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 12, y = 22, width = 6, height = 6
-        properties = {
-          title = "Redis Replication Lag (초)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            ["AWS/ElastiCache", "ReplicationLag", "ReplicationGroupId", var.redis_replication_group_id, { stat = "Maximum", label = "ReplicationLag" }]
-          ]
-        }
-      },
-
-      { type = "metric", x = 18, y = 22, width = 6, height = 6
-        properties = {
-          title = "RDS 여유 스토리지 (GiB)"
-          region = data.aws_region.current.name
-          view = "timeSeries", period = 300
-          metrics = [
-            [{ expression = "m1/1024/1024/1024", label = "Free Storage (GiB)", id = "storage_gib" }],
-            ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", var.rds_instance_id, { id = "m1", visible = false, stat = "Minimum" }]
-          ]
-        }
-      }
-    ]
-  })
-}
-
 # 공통 설정
 # datapoints_to_alarm = 2, evaluation_periods = 2, treat_missing_data = "notBreaching"
 # 예외: fiveline-alarm-ca-pending-pods (period=60, eval=4, dtp=4)
 #       fiveline-alarm-burn-rate-1h    (period=3600, eval=1, dtp=1)
 
 locals {
-  # 5 GiB (bytes)
-  rds_storage_threshold_bytes = 5368709120
+  # 할당 스토리지의 10% (bytes)
+  rds_storage_threshold_bytes = floor(var.rds_allocated_storage_gb * 1024 * 1024 * 1024 * 0.1)
+  # 할당 메모리의 10% (bytes)
+  rds_memory_threshold_bytes  = floor(var.rds_allocated_memory_gb * 1024 * 1024 * 1024 * 0.1)
 }
 
 # ══════════════════════════════════════════════
@@ -239,94 +94,10 @@ resource "aws_cloudwatch_metric_alarm" "alb_503" {
 # RDS 알람
 # ══════════════════════════════════════════════
 
-# RDS 동시 접속 수 > 136 (max_connections 170 기준 80%)
-resource "aws_cloudwatch_metric_alarm" "rds_connections" {
-  alarm_name          = "fiveline-alarm-rds-connections"
-  alarm_description   = "[Warning] RDS 동시 접속 수 136 초과 (max_connections 80%)"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  datapoints_to_alarm = 2
-  metric_name         = "DatabaseConnections"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Maximum"
-  threshold           = 136
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    DBInstanceIdentifier = var.rds_instance_id
-  }
-
-  alarm_actions = [aws_sns_topic.alarm.arn]
-  ok_actions    = [aws_sns_topic.alarm.arn]
-
-  tags = {
-    Name     = "fiveline-alarm-rds-connections"
-    Service  = "monitoring"
-    Severity = "warning"
-  }
-}
-
-# RDS 쓰기 지연 > 100ms
-resource "aws_cloudwatch_metric_alarm" "rds_write_latency" {
-  alarm_name          = "fiveline-alarm-rds-write-latency"
-  alarm_description   = "[Critical] RDS 쓰기 지연 100ms 초과"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  datapoints_to_alarm = 2
-  metric_name         = "WriteLatency"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 0.1
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    DBInstanceIdentifier = var.rds_instance_id
-  }
-
-  alarm_actions = [aws_sns_topic.alarm.arn]
-  ok_actions    = [aws_sns_topic.alarm.arn]
-
-  tags = {
-    Name     = "fiveline-alarm-rds-write-latency"
-    Service  = "monitoring"
-    Severity = "critical"
-  }
-}
-
-# RDS Replica Lag > 30초
-resource "aws_cloudwatch_metric_alarm" "rds_replica_lag" {
-  alarm_name          = "fiveline-alarm-rds-replica-lag"
-  alarm_description   = "[Warning] RDS Replica Lag 30초 초과"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  datapoints_to_alarm = 2
-  metric_name         = "ReplicaLag"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Maximum"
-  threshold           = 30
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    DBInstanceIdentifier = var.rds_instance_id
-  }
-
-  alarm_actions = [aws_sns_topic.alarm.arn]
-  ok_actions    = [aws_sns_topic.alarm.arn]
-
-  tags = {
-    Name     = "fiveline-alarm-rds-replica-lag"
-    Service  = "monitoring"
-    Severity = "warning"
-  }
-}
-
-# RDS 여유 스토리지 < 5 GiB
+# RDS 여유 스토리지 < 할당 용량의 10%
 resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   alarm_name          = "fiveline-alarm-rds-storage"
-  alarm_description   = "[Warning] RDS 여유 스토리지 5GiB 미만"
+  alarm_description   = "[Warning] RDS 여유 스토리지 전체 용량의 10% 미만"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
   datapoints_to_alarm = 2
@@ -346,6 +117,34 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage" {
 
   tags = {
     Name     = "fiveline-alarm-rds-storage"
+    Service  = "monitoring"
+    Severity = "warning"
+  }
+}
+
+# RDS 메모리 사용률 90% 초과 (FreeableMemory < 전체 메모리의 10%)
+resource "aws_cloudwatch_metric_alarm" "rds_freeable_memory" {
+  alarm_name          = "fiveline-alarm-rds-freeable-memory"
+  alarm_description   = "[Warning] RDS 여유 메모리 전체 메모리의 10% 미만 (사용률 90% 초과)"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  datapoints_to_alarm = 2
+  metric_name         = "FreeableMemory"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Minimum"
+  threshold           = local.rds_memory_threshold_bytes
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = var.rds_instance_id
+  }
+
+  alarm_actions = [aws_sns_topic.alarm.arn]
+  ok_actions    = [aws_sns_topic.alarm.arn]
+
+  tags = {
+    Name     = "fiveline-alarm-rds-freeable-memory"
     Service  = "monitoring"
     Severity = "warning"
   }

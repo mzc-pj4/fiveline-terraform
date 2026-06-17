@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: 089955620282.dkr.ecr.ap-northeast-2.amazonaws.com/mzc-pj4-jihoo/user-service:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:lmh!1961495@mzc-pj4-dev-rds.chsgo2iu4ob1.ap-northeast-2.rds.amazonaws.com:5432/postgres"
+            - name: JWT_SECRET
+              value: "dev-jwt-secret-key"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: default
+spec:
+  selector:
+    app: user-service
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP
