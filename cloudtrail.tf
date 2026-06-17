@@ -96,17 +96,6 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
       },
       {
-        # SEC: CloudFront 액세스 로그를 cloudtrail 버킷에 통합 저장 (cloudfront/ prefix)
-        Sid    = "AllowCloudFrontLogDelivery"
-        Effect = "Allow"
-        Principal = { Service = "delivery.logs.amazonaws.com" }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail.arn}/cloudfront/*"
-        Condition = {
-          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
-        }
-      },
-      {
         Sid    = "AWSCloudTrailWrite"
         Effect = "Allow"
         Principal = {

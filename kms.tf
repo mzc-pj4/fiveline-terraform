@@ -157,6 +157,20 @@ resource "aws_kms_key" "secrets_manager" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        # SEC: CloudFront Logs v2 — delivery.logs.amazonaws.com이 SSE-KMS 버킷에 PutObject 시
+        #      GenerateDataKey 필요 (버킷 기본 암호화 자동 적용)
+        Sid    = "CloudFrontLogDeliveryUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
       }
     ]
   })

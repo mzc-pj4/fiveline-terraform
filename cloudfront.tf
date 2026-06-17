@@ -219,12 +219,6 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  logging_config {
-    include_cookies = false
-    bucket          = aws_s3_bucket.cloudtrail.bucket_domain_name
-    prefix          = "cloudfront/main/"
-  }
-
   tags = {
     Service = "frontend"
     Name    = "${local.project}-cloudfront"
@@ -308,12 +302,6 @@ resource "aws_cloudfront_distribution" "admin" {
     geo_restriction {
       restriction_type = "none"
     }
-  }
-
-  logging_config {
-    include_cookies = false
-    bucket          = aws_s3_bucket.cloudtrail.bucket_domain_name
-    prefix          = "cloudfront/admin/"
   }
 
   tags = {
