@@ -8,13 +8,13 @@
 ## 발표 전략 요약
 
 ### 공통 발표 (기본 인프라 보안 — 팀원이 담당)
-HTTPS, S3 OAC, RDS 암호화, ACM, GuardDuty, CloudTrail, KMS 등
+HTTPS, S3 OAC, RDS 암호화, ACM, GuardDuty, CloudTrail, KMS, WAF 관리형 룰셋 등
 → "당연히 해야 하는 것"이기 때문에 개인 발표에서는 언급만 하고 넘긴다
 
 ### 개인 발표 (이커머스 특화 고도화 — 내가 발표)
-1. EKS Zero Trust 접근 경로 설계 (아키텍처)
-2. 이커머스 특화 WAF (크리덴셜 스터핑 / 재고 봇 / 카드 BIN 어택)
-3. Zero Trust 완성: IRSA(N-S) + NetworkPolicy(E-W)
+1. EKS Zero Trust 접근 경로 설계
+2. 이커머스 특화 WAF Custom Rate Limit
+3. Zero Trust 완성: IRSA(N-S) + VPC CNI NetworkPolicy(E-W)
 4. 웹스키밍 방어: CSP unsafe-inline 결함 발견 + 수정
 5. PII 데이터 감사: pgaudit
 
@@ -83,7 +83,7 @@ BEFORE                              AFTER
   ↓                                   ↓
 EKS API 서버 (0.0.0.0/0 오픈)       [SSM Session Manager]
   ↓                                   ↓ (포트 22 없음, IAM 기반)
-kubectl 명령 가능 (누구든)          WorkStation EC2 (private subnet)
+kubectl 명령 가능 (누구든)          Workstation EC2 (private subnet)
                                       ↓
                                     kubectl → EKS API 서버
                                                (443, private endpoint only)
@@ -91,15 +91,13 @@ kubectl 명령 가능 (누구든)          WorkStation EC2 (private subnet)
                                          SG 참조 ingress (CIDR 아닌 SG ID)
 ```
 
-**왜 설계가 필요한가** (강조):
-
-단순히 `endpoint_public_access=false` 한 줄로 끝나지 않는다:
+**5-layer 설계** (하나라도 빠지면 동작 안 함):
 
 | 레이어 | 변경 내용 | 없으면 |
 |--------|---------|--------|
-| 네트워크 | WorkStation → private subnet 이동 + NAT 라우팅 신규 설계 | SSM Agent가 AWS 통신 불가 |
-| SG | EKS 클러스터 SG에 Bastion SG → 443 ingress | kubectl i/o timeout |
-| IAM | eks:DescribeCluster 권한 추가 | AccessDeniedException |
+| 네트워크 | Workstation → private subnet + NAT 라우팅 | SSM Agent AWS 통신 불가 |
+| SG | EKS 클러스터 SG에 Workstation SG → 443 ingress | kubectl i/o timeout |
+| IAM | eks:DescribeCluster + DescribeNodegroup ARN 제한 | AccessDeniedException |
 | RBAC | access_entry + ClusterAdminPolicy | credentials error |
 
 **발표 멘트**:
@@ -112,9 +110,9 @@ kubectl 명령 가능 (누구든)          WorkStation EC2 (private subnet)
 
 ---
 
-## 슬라이드 4 — 이커머스 특화 WAF (2분)
+## 슬라이드 4 — 이커머스 특화 WAF Custom Rate Limit (2분)
 
-**제목**: 관리형 룰셋이 못 막는 공격을 막는다 — Custom Rate Limit
+**제목**: 관리형 룰셋이 못 막는 공격을 막는다
 
 **상단 — 문제 제기**:
 
@@ -126,34 +124,28 @@ kubectl 명령 가능 (누구든)          WorkStation EC2 (private subnet)
 이유: 모두 정상 POST 요청 형태 → 룰셋이 악성으로 분류하지 않음
 ```
 
-**중단 — 설계: 엔드포인트별 Rate Limit**:
+**중단 — 구현: 엔드포인트별 Rate Limit**:
 
 ```
-공격               엔드포인트          Rate Limit 설계
+공격               엔드포인트              Rate Limit
 ──────────────────────────────────────────────────────
-크리덴셜 스터핑   /api/users/login    IP당 5분 100회 초과 → 자동 차단
-카드 BIN 어택     /api/orders         IP당 5분 20회 초과 → 자동 차단
-가격 스크래핑     /api/products       IP당 1분 200회 초과 → 자동 차단
+크리덴셜 스터핑   /api/auth/login         IP당 5분 100회 초과 → 자동 차단
+카드 BIN 어택     /api/orders/from-cart   IP당 5분 20회 초과 → 자동 차단
+가격 스크래핑     /api/products           IP당 1분 200회 초과 → 자동 차단
 ```
 
 **하단 — 구현 포인트**:
 
 ```hcl
-# Custom Rule Group → Regional WAF에 우선순위 0으로 연결
-# 관리형 룰셋보다 먼저 적용됨
-# CloudWatch Metric → 차단 횟수 모니터링 가능
+# waf.tf — aws_wafv2_rule_group.ecommerce_ratelimit
+# Regional WAF에 priority=0으로 연결 → 관리형 룰셋보다 먼저 평가
+# CloudWatch Metric → 차단 횟수 실시간 모니터링
 ```
 
 **발표 멘트**:
 > "관리형 룰셋은 AWS가 관리하는 알려진 공격을 막습니다.
 > 이커머스를 겨냥한 공격은 **우리 비즈니스 로직을 이해한 커스텀 룰**이 필요합니다.
 > 로그인 엔드포인트에 Rate Limit을 걸면 크리덴셜 스터핑을 원천 차단할 수 있습니다."
-
-**비용**:
-```
-Rate-based Rule: 무료 (WAF 기본 포함)
-ATP Rule Set(확장): ~$10/월 추가 (프로덕션 확장안)
-```
 
 **비주얼**: 상/중/하 3단 구성 + 공격 시나리오 화살표
 
@@ -167,25 +159,28 @@ ATP Rule Set(확장): ~$10/월 추가 (프로덕션 확장안)
 
 ```
 구현된 것:
-  Pod → AWS (남북 축):  IRSA로 격리 ✅
-    user-service-pod   → S3 product-images/ 만
-    order-service-pod  → SNS fiveline-* 만
+  Pod → AWS (남북 축):  IRSA 8종으로 격리 ✅
+    user-sa     → SES SendEmail (fiveline.store 도메인만)
+    product-sa  → S3 product-images/ 만
+    order-sa    → SNS fiveline-* 토픽만
 
 빠진 것:
-  Pod ↔ Pod (동서 축):  완전 무방비 ❌
+  Pod ↔ Pod (동서 축):  무방비 ❌
     order-service 침해 → user-service DB 직접 접근 가능
     Pod 하나 탈취 → 네임스페이스 전체 서비스 노출
 ```
 
-**하단 — 해결: NetworkPolicy default-deny**:
+**하단 — 해결: VPC CNI NetworkPolicy 활성화**:
 
 ```
-default-deny (namespace 전체 차단)
-  + allow-order-to-product (order → product:8000 만 허용)
-  + allow-egress-rds (모든 Pod → RDS:5432 허용)
-  + allow-egress-cache (모든 Pod → Redis:6379 허용)
+Terraform: enableNetworkPolicy = "true" (eks.tf)
+  → NetworkPolicy YAML을 적용할 수 있는 인프라 레이어 구축 완료
 
-= Pod가 침해되어도 인접 서비스로 이동 불가
+Policy 적용 시:
+  default-deny (namespace 전체 차단)
+  + allow-order-to-product (order → product:8000 만)
+  + allow-egress-rds (모든 Pod → RDS:5432)
+  = Pod가 침해되어도 인접 서비스로 이동 불가
 ```
 
 **완성된 Zero Trust 그림**:
@@ -193,22 +188,22 @@ default-deny (namespace 전체 차단)
 ```
          인터넷
            ↓
-       [WAF + 보안헤더]     ← 경계 방어
+       [WAF + 보안헤더]        ← 경계 방어
            ↓
        [EKS private endpoint]  ← 접근 경로 통제
            ↓
-    IRSA: Pod → AWS 권한 격리     ← 남북 통제
-    NetworkPolicy: Pod ↔ Pod 격리  ← 동서 통제
+    IRSA: Pod → AWS 권한 격리  ← 남북 통제
+    NetworkPolicy: Pod ↔ Pod   ← 동서 통제
            ↓
-       [RDS/ElastiCache]    ← 데이터 계층
+       [RDS/ElastiCache]       ← 데이터 계층
 ```
 
 **발표 멘트**:
-> "IRSA는 Pod가 AWS 서비스에 접근하는 권한을 제한합니다. 남북 축입니다.
-> NetworkPolicy는 Pod끼리 통신하는 동서 축을 막습니다.
+> "IRSA는 Pod가 AWS 서비스에 접근하는 권한을 남북으로 제한합니다.
+> VPC CNI NetworkPolicy는 Pod 간 동서 통신을 격리합니다.
 > 둘이 함께 있어야 진짜 Zero Trust입니다."
 
-**비주얼**: 2단 (GAP → 해결) + 완성된 Zero Trust 다이어그램
+**비주얼**: 2단 (GAP → 해결) + Zero Trust 다이어그램
 
 ---
 
@@ -227,13 +222,11 @@ Magecart 공격:
 발견한 결함:
   script-src 'self' 'unsafe-inline'
                     ^^^^^^^^^^^^^^^
-                    이게 있으면 CSP가 인라인 스크립트를 허용
-                    → Magecart 스크립트 차단 불가
+                    인라인 스크립트 허용 → CSP 무력화
 
-수정:
+수정 (cloudfront.tf):
   script-src 'self'
-  (unsafe-inline 제거)
-  → 인라인 스크립트 실행 자체를 브라우저가 차단
+  (unsafe-inline 제거 → 브라우저가 인라인 스크립트 실행 자체를 차단)
 ```
 
 **우측 — pgaudit (PII 데이터 감사)**:
@@ -243,7 +236,7 @@ RDS storage_encrypted=true 의 한계:
   디스크 도난 → ✅ 막음
   SQL로 정상 접근 → ❌ 평문 그대로
 
-pgaudit 적용 후:
+pgaudit 적용 후 (rds.tf):
   누가(user=admin) 어디서(client=10.10.2.15)
   어떤 쿼리로(SELECT * FROM users LIMIT 100000)
   언제 실행했는지 → CloudWatch에 기록
@@ -261,7 +254,7 @@ pgaudit 적용 후:
 
 ---
 
-## 슬라이드 7 — 종합 아키텍처 + 로드맵 (1분)
+## 슬라이드 7 — 종합 아키텍처 + 마무리 (1분)
 
 **제목**: 이커머스 보안 — 위협에서 설계까지
 
@@ -271,7 +264,7 @@ pgaudit 적용 후:
 |----------------|---------|------|
 | 크리덴셜 스터핑 / 재고 봇 / 카드 BIN | WAF Custom Rate Limit | ✅ |
 | K8s API 인터넷 노출 | EKS private endpoint + SSM 접근 경로 | ✅ |
-| Pod 침해 후 내부 이동 | IRSA(N-S) + NetworkPolicy(E-W) | ✅ |
+| Pod 침해 후 내부 이동 | IRSA(N-S) + VPC CNI NetworkPolicy(E-W) | ✅ |
 | 결제 페이지 웹스키밍 | CSP unsafe-inline 제거 | ✅ |
 | 내부자 PII 무단 조회 | pgaudit 감사 로그 | ✅ |
 
@@ -279,10 +272,11 @@ pgaudit 적용 후:
 ```
 HTTPS · ACM · S3 OAC · RDS 암호화 · KMS CMK · IMDSv2
 GuardDuty · CloudTrail · VPC Flow Logs · WAF 관리형 룰셋
+CloudFront 보안 헤더 · CloudFront Standard Logging v2
 → 기본 인프라 보안 전 항목 완료 (공통 발표 참조)
 ```
 
-**핵심 클로징 멘트**:
+**클로징 멘트**:
 > "fiveline에서 보안은 체크리스트가 아닙니다.
 > 이커머스가 실제로 당하는 공격을 먼저 정의하고,
 > 그 공격에 맞는 설계 결정을 내렸습니다.
@@ -308,16 +302,21 @@ GuardDuty · CloudTrail · VPC Flow Logs · WAF 관리형 룰셋
 
 **Q: NetworkPolicy는 Terraform이 아닌데?**
 > A: "EKS VPC CNI의 Network Policy 기능 활성화는 Terraform으로 했습니다.
-> 실제 정책 YAML은 K8s 매니페스트입니다. 인프라 레이어 활성화가 제 역할, 정책 작성은 앱팀과 협업했습니다."
+> 이 설정 없이는 kubectl apply -f network-policy.yaml을 해도 아무 효과가 없습니다.
+> 인프라 레이어 활성화가 제 역할, 실제 Policy YAML은 앱팀 K8s manifest에서 관리합니다."
 
 **Q: Custom WAF Rule이 정상 사용자를 차단하지 않는가?**
-> A: "Rate Limit은 IP당 5분 100회입니다. 정상 사용자가 5분에 100번 로그인을 시도하지 않습니다. 봇은 초당 수백 건 시도하므로 명확히 구분됩니다."
+> A: "Rate Limit은 IP당 5분 100회입니다. 정상 사용자가 5분에 100번 로그인을 시도하지 않습니다.
+> 봇은 초당 수백 건 시도하므로 명확히 구분됩니다."
 
 **Q: pgaudit을 켜면 로그가 너무 많지 않나?**
-> A: "read,write,ddl 레벨만 수집하고 CloudWatch에서 특정 테이블 필터링이 가능합니다. PIPA 요건인 '접근 기록 6개월 보관'을 충족하면서 스토리지 비용은 CloudWatch 30일 보관으로 관리합니다."
+> A: "read,write,ddl 레벨만 수집하고 CloudWatch에서 테이블 필터링이 가능합니다.
+> PIPA 요건인 '접근 기록 6개월 보관'을 충족하면서 CloudWatch 30일 보관으로 비용을 관리합니다."
 
 **Q: IRSA는 이미 있는데 왜 NetworkPolicy를 또 해야 하나?**
-> A: "IRSA는 Pod가 AWS API를 호출하는 권한을 제한합니다. NetworkPolicy는 Pod 간 직접 TCP 통신을 제한합니다. 공격자가 Pod를 탈취했을 때 AWS API가 아닌 인접 서비스를 직접 찌르는 경우를 막는 것이 NetworkPolicy입니다."
+> A: "IRSA는 Pod가 AWS API를 호출하는 권한을 제한합니다.
+> NetworkPolicy는 Pod 간 직접 TCP 통신을 제한합니다.
+> 공격자가 Pod를 탈취했을 때 AWS API가 아닌 인접 서비스를 직접 찌르는 경우를 막는 것이 NetworkPolicy입니다."
 
 ---
 
@@ -328,7 +327,7 @@ GuardDuty · CloudTrail · VPC Flow Logs · WAF 관리형 룰셋
 | 1 | 표지 + 도입 | 30초 |
 | 2 | 이커머스 위협 모델 | 1분 30초 |
 | 3 | EKS 접근 경로 설계 | 1분 30초 |
-| 4 | 이커머스 WAF Custom Rule | 2분 |
+| 4 | 이커머스 WAF Custom Rate Limit | 2분 |
 | 5 | Zero Trust 완성 | 1분 30초 |
 | 6 | CSP + pgaudit | 1분 30초 |
 | 7 | 종합 + 클로징 | 1분 |
