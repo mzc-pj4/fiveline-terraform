@@ -52,3 +52,15 @@ variable "redis_replication_group_id" {
   description = "ElastiCache Redis Replication Group ID"
   type        = string
 }
+
+variable "rds_allocated_storage_gb" {
+  description = "RDS 할당 스토리지 용량 (GB) — FreeStorageSpace 10% 임계값 계산에 사용"
+  type        = number
+  default     = 100
+}
+
+variable "rds_allocated_memory_gb" {
+  description = "RDS 인스턴스 메모리 용량 (GB) — FreeableMemory 10% 임계값 계산에 사용"
+  type        = number
+  default     = 2
+}
