@@ -132,9 +132,15 @@ resource "aws_s3_bucket_policy" "cloudfront_logs" {
 
 # ── CloudWatch Logs Vended Delivery (v2) ──────────────────────────────────────
 
+# ── CloudWatch Logs Vended Delivery 리소스는 반드시 us-east-1에서 생성 ──────────
+# CloudFront Standard Logs v2의 PutDeliverySource API는 us-east-1에서만 지원
+# (CloudFront 글로벌 컨트롤 플레인이 us-east-1 기반)
+# S3 버킷은 ap-northeast-2 유지 — cross-region delivery 지원됨
+
 # 로그 목적지 — S3 버킷 (main/admin 공유)
 resource "aws_cloudwatch_log_delivery_destination" "cloudfront_s3" {
-  name = "${local.project}-cloudfront-logs"
+  provider = aws.us_east_1
+  name     = "${local.project}-cloudfront-logs"
 
   delivery_destination_configuration {
     destination_resource_arn = aws_s3_bucket.cloudfront_logs.arn
@@ -150,6 +156,7 @@ resource "aws_cloudwatch_log_delivery_destination" "cloudfront_s3" {
 
 # 로그 소스 — main distribution
 resource "aws_cloudwatch_log_delivery_source" "cloudfront_main" {
+  provider     = aws.us_east_1
   name         = "${local.project}-cloudfront-main"
   log_type     = "ACCESS_LOGS"
   resource_arn = aws_cloudfront_distribution.main.arn
@@ -162,7 +169,8 @@ resource "aws_cloudwatch_log_delivery_source" "cloudfront_main" {
 
 # 로그 소스 — admin distribution (var.alb_dns_name 설정 시에만 생성)
 resource "aws_cloudwatch_log_delivery_source" "cloudfront_admin" {
-  count = var.alb_dns_name != "" ? 1 : 0
+  count    = var.alb_dns_name != "" ? 1 : 0
+  provider = aws.us_east_1
 
   name         = "${local.project}-cloudfront-admin"
   log_type     = "ACCESS_LOGS"
@@ -176,6 +184,7 @@ resource "aws_cloudwatch_log_delivery_source" "cloudfront_admin" {
 
 # 소스 ↔ 목적지 연결 — main distribution
 resource "aws_cloudwatch_log_delivery" "cloudfront_main" {
+  provider                 = aws.us_east_1
   delivery_source_name     = aws_cloudwatch_log_delivery_source.cloudfront_main.name
   delivery_destination_arn = aws_cloudwatch_log_delivery_destination.cloudfront_s3.arn
 
@@ -187,7 +196,8 @@ resource "aws_cloudwatch_log_delivery" "cloudfront_main" {
 
 # 소스 ↔ 목적지 연결 — admin distribution (count 조건 동기화)
 resource "aws_cloudwatch_log_delivery" "cloudfront_admin" {
-  count = var.alb_dns_name != "" ? 1 : 0
+  count    = var.alb_dns_name != "" ? 1 : 0
+  provider = aws.us_east_1
 
   delivery_source_name     = aws_cloudwatch_log_delivery_source.cloudfront_admin[0].name
   delivery_destination_arn = aws_cloudwatch_log_delivery_destination.cloudfront_s3.arn
