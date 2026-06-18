@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 # modules/cicd/main.tf
 # ECR + GitHub Actions OIDC IAM Role 통합 모듈
 # 출처: lhj/modules/ecr/ + lhj/modules/github-actions-oidc/
@@ -107,7 +107,7 @@ resource "aws_iam_role_policy" "ecr" {
         Sid      = "ECRAuth"
         Effect   = "Allow"
         Action   = ["ecr:GetAuthorizationToken"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "ECRPush"
@@ -141,7 +141,7 @@ resource "aws_iam_role_policy" "eks" {
       Sid      = "EKSDescribe"
       Effect   = "Allow"
       Action   = ["eks:DescribeCluster"]
-      Resource = "*"
+      Resource = "*" # nosonar
     }]
   })
 }

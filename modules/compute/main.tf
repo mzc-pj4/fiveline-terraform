@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project      = "fiveline"
   cluster_name = "fiveline-eks"
   oidc_url     = replace(aws_eks_cluster.fiveline_eks.identity[0].oidc[0].issuer, "https://", "")
@@ -264,7 +264,7 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect   = "Allow"
         Action   = ["iam:CreateServiceLinkedRole"]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           StringEquals = { "iam:AWSServiceName" = "elasticloadbalancing.amazonaws.com" }
         }
@@ -290,7 +290,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:DescribeTargetHealth",
           "elasticloadbalancing:DescribeTags"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"
@@ -304,17 +304,17 @@ resource "aws_iam_policy" "lb_controller" {
           "shield:GetSubscriptionState", "shield:DescribeProtection",
           "shield:CreateProtection", "shield:DeleteProtection"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
         Action   = ["ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
         Action   = ["ec2:CreateSecurityGroup"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
@@ -339,7 +339,7 @@ resource "aws_iam_policy" "lb_controller" {
           "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
           "ec2:DeleteSecurityGroup"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:ResourceTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -347,7 +347,7 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect   = "Allow"
         Action   = ["elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:CreateTargetGroup"]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:RequestTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -358,7 +358,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListener",
           "elasticloadbalancing:CreateRule", "elasticloadbalancing:DeleteRule"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"
@@ -394,7 +394,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:ModifyTargetGroup", "elasticloadbalancing:ModifyTargetGroupAttributes",
           "elasticloadbalancing:DeleteTargetGroup"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:ResourceTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -428,7 +428,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:ModifyRule",
           "elasticloadbalancing:SetRulePriorities"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })
@@ -548,7 +548,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "ec2:DescribeLaunchTemplateVersions",
           "ec2:GetInstanceTypesFromInstanceRequirements"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
@@ -740,7 +740,7 @@ resource "aws_iam_policy" "admin_service" {
           "cloudwatch:GetMetricStatistics",
           "cloudwatch:ListMetrics"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"

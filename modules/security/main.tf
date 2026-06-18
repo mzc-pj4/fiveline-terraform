@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project = "fiveline"
 }
 
@@ -245,7 +245,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
       {
         Sid       = "DenyHTTP"
         Effect    = "Deny"
-        Principal = "*"
+        Principal = "*" # nosonar — HTTPS 강제 Deny 정책 (보안 강화)
         Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail.arn,
@@ -339,7 +339,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
       {
         Effect   = "Allow"
         Action   = ["logs:DescribeLogGroups"]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })

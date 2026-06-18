@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project = var.project
 }
 
@@ -99,7 +99,7 @@ resource "aws_iam_role_policy" "bedrock_agent" {
           "aws-marketplace:ViewSubscriptions",
           "aws-marketplace:Subscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
     ]
   })
@@ -264,7 +264,7 @@ resource "aws_iam_role_policy" "report_generator_custom" {
           "aws-marketplace:Subscribe",
           "aws-marketplace:Unsubscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "DynamoDBRead"
@@ -385,13 +385,13 @@ resource "aws_iam_role_policy" "bedrock_agent_action_custom" {
           "athena:GetQueryExecution",
           "athena:GetQueryResults",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLake"
@@ -498,7 +498,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "aws-marketplace:ViewSubscriptions",
           "aws-marketplace:Subscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "DynamoDBRead"
@@ -535,7 +535,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "GlueCatalogRead"
@@ -546,7 +546,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLake"

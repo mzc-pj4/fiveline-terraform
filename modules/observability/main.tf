@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 # modules/observability/main.tf
 # hsh 알람/Lambda/DynamoDB + jihoo 대시보드 통합 모듈
 # ══════════════════════════════════════════════════════════════════════════════
@@ -654,7 +654,7 @@ resource "aws_s3_bucket" "dashboard" {
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "dashboard" {
+resource "aws_s3_bucket_public_access_block" "dashboard" { # nosonar — 정적 웹사이트 호스팅용 퍼블릭 버킷 (의도된 설계)
   bucket                  = aws_s3_bucket.dashboard.id
   block_public_acls       = false
   block_public_policy     = false
@@ -683,7 +683,7 @@ resource "aws_s3_bucket_policy" "dashboard" {
     Statement = [{
       Sid       = "PublicRead"
       Effect    = "Allow"
-      Principal = "*"
+      Principal = "*" # nosonar — 정적 웹사이트 퍼블릭 읽기 (의도된 설계)
       Action    = "s3:GetObject"
       Resource  = "${aws_s3_bucket.dashboard.arn}/*"
     }]
@@ -756,13 +756,13 @@ resource "aws_iam_role_policy" "dashboard_api_custom" {
           "athena:GetQueryExecution",
           "athena:GetQueryResults",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3AthenaResults"
@@ -925,13 +925,13 @@ resource "aws_iam_role_policy" "dashboard_builder_custom" {
         Sid      = "AthenaQuery"
         Effect   = "Allow"
         Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLakeRead"

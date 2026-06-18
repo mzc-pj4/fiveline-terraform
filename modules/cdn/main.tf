@@ -167,7 +167,7 @@ resource "aws_s3_bucket_policy" "cloudfront_logs" {
       {
         Sid       = "DenyHTTP"
         Effect    = "Deny"
-        Principal = "*"
+        Principal = "*" # nosonar — HTTPS 강제 Deny 정책 (보안 강화)
         Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudfront_logs.arn,

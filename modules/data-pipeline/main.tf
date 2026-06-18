@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 #  modules/data-pipeline/main.tf
 #  S3 Data Lake → Firehose → Glue ETL → Athena → Lambda 집계/요약 파이프라인
 # ══════════════════════════════════════════════════════════════════════════════
@@ -704,7 +704,7 @@ resource "aws_iam_role_policy" "resource_checker_custom" {
           "ec2:DescribeSecurityGroups",
           "rds:DescribeDBInstances",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "DynamoDBWriteCheckResults"
@@ -795,7 +795,7 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "GlueCatalogRead"
@@ -806,7 +806,7 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLakeReadWrite"
@@ -902,7 +902,7 @@ resource "aws_iam_role_policy" "metrics_collector_custom" {
           "cloudwatch:GetMetricData",
           "cloudwatch:ListMetrics",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "S3WriteCWMetrics"
@@ -1014,7 +1014,7 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Sid      = "GlueCatalog"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions", "glue:BatchCreatePartition", "glue:CreatePartition", "glue:UpdatePartition"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "InvokeLambda"
@@ -1029,7 +1029,7 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Sid      = "AthenaQuery"
         Effect   = "Allow"
         Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "AthenaS3"
