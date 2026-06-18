@@ -15,7 +15,7 @@ variable "alb_dns_name" {
 variable "security_alert_email" {
   description = "GuardDuty 보안 알림 수신 이메일 주소"
   type        = string
-  default     = "lljjmm1010@gmail.com"
+  default     = ""
 }
 
 variable "admin_allowed_cidrs" {
