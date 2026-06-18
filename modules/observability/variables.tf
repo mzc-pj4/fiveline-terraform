@@ -1,3 +1,8 @@
+variable "artifacts_bucket" {
+  description = "S3 artifact 버킷 이름 — Lambda zip 저장소 (CI/CD가 업로드)"
+  type        = string
+}
+
 # ──────────────────────────────────────────────
 # hsh/variables.tf 에서 온 변수들
 # ──────────────────────────────────────────────

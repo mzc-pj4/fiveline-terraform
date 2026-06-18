@@ -31,3 +31,8 @@ variable "ecr_prefix" {
   type        = string
   default     = "fiveline-ecr"
 }
+
+variable "kms_arn" {
+  description = "KMS 키 ARN — artifact 버킷 암호화에 사용"
+  type        = string
+}

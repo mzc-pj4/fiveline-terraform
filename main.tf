@@ -90,8 +90,7 @@ module "database" {
 module "data_pipeline" {
   source = "./modules/data-pipeline"
 
-  lambda_src_path               = "${path.root}/jihoo/lambda-src"
-  glue_scripts_path             = "${path.root}/jihoo/glue-scripts"
+  artifacts_bucket              = module.cicd.artifacts_bucket
   dashboard_builder_lambda_arn  = var.dashboard_builder_lambda_arn
   dashboard_builder_lambda_name = var.dashboard_builder_lambda_name
 }
@@ -103,7 +102,8 @@ module "data_pipeline" {
 module "ai" {
   source = "./modules/ai"
 
-  env = "prod"
+  env              = "prod"
+  artifacts_bucket = module.cicd.artifacts_bucket
 
   data_lake_bucket_arn         = module.data_pipeline.data_lake_bucket_arn
   data_lake_bucket_name        = module.data_pipeline.data_lake_bucket_id
@@ -124,6 +124,8 @@ module "ai" {
 
 module "observability" {
   source = "./modules/observability"
+
+  artifacts_bucket = module.cicd.artifacts_bucket
 
   # hsh 변수
   s3_bucket_name             = module.data_pipeline.data_lake_bucket_id
@@ -155,4 +157,5 @@ module "cicd" {
 
   github_org   = var.github_org
   github_repos = var.github_repos
+  kms_arn      = module.kms.secrets_key_arn
 }
