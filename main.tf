@@ -155,7 +155,8 @@ module "observability" {
 module "cicd" {
   source = "./modules/cicd"
 
-  github_org   = var.github_org
-  github_repos = var.github_repos
-  kms_arn      = module.kms.secrets_manager_arn
+  github_org            = var.github_org
+  github_repos          = var.github_repos
+  kms_arn               = module.kms.secrets_manager_arn
+  dashboard_bucket_name = module.observability.dashboard_bucket_name
 }

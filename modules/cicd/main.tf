@@ -246,6 +246,31 @@ resource "aws_iam_role_policy" "github_actions_artifacts" {
 # ── SSM Parameter Store — CI/CD 참조값 자동 관리 ──────────────────────────────
 # GitHub Actions가 이 값들을 런타임에 SSM에서 읽어옴 (수동 Secret 관리 불필요)
 
+resource "aws_iam_role_policy" "github_actions_dashboard" {
+  name = "${var.project_name}-github-actions-dashboard"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DashboardBucketWrite"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.dashboard_bucket_name}",
+          "arn:aws:s3:::${var.dashboard_bucket_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_ssm_parameter" "artifacts_bucket" {
   name  = "/fiveline/cicd/artifacts-bucket"
   type  = "String"
@@ -253,6 +278,17 @@ resource "aws_ssm_parameter" "artifacts_bucket" {
 
   tags = {
     Name    = "fiveline-cicd-artifacts-bucket"
+    Service = "cicd"
+  }
+}
+
+resource "aws_ssm_parameter" "dashboard_bucket" {
+  name  = "/fiveline/cicd/dashboard-bucket"
+  type  = "String"
+  value = var.dashboard_bucket_name
+
+  tags = {
+    Name    = "fiveline-cicd-dashboard-bucket"
     Service = "cicd"
   }
 }
