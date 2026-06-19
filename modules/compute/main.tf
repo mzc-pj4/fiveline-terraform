@@ -728,7 +728,7 @@ resource "aws_iam_role_policy_attachment" "order_service" {
 
 resource "aws_iam_policy" "admin_service" {
   name        = "${local.project}-admin-service-policy"
-  description = "admin-service: CloudWatch 읽기 전용 (대시보드 메트릭 조회)"
+  description = "admin-service: CloudWatch 읽기 전용 + dashboard S3 data.json 읽기"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -755,6 +755,11 @@ resource "aws_iam_policy" "admin_service" {
           "arn:aws:logs:ap-northeast-2:*:log-group:aws-waf-logs-${local.project}*:*",
           "arn:aws:logs:ap-northeast-2:*:log-group:/aws/vpc/flowlogs/${local.project}:*"
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "arn:aws:s3:::${local.project}-dashboard/data.json"
       }
     ]
   })
