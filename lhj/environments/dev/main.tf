@@ -53,6 +53,12 @@ module "rds" {
   deletion_protection = false
 }
 
+module "dynamodb" {
+  source       = "../../modules/dynamodb"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
 resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
   name = "dynamodb-aiops-read-policy"
   role = "fiveline-admin-service-sa-role"
@@ -73,7 +79,6 @@ resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
 }
 
 data "aws_caller_identity" "current" {}
-
 resource "null_resource" "argocd" {
   triggers = {
     cluster_name = module.eks.cluster_name
