@@ -612,16 +612,16 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
 
 locals {
   app_services = {
-    user    = { namespace = "production", sa = "user-sa" }
-    product = { namespace = "production", sa = "product-sa" }
-    order   = { namespace = "production", sa = "order-sa" }
-    admin   = { namespace = "production", sa = "admin-sa" }
+    user    = { namespace = "fiveline", sa = "user-service-sa" }
+    product = { namespace = "fiveline", sa = "product-service-sa" }
+    order   = { namespace = "fiveline", sa = "order-service-sa" }
+    admin   = { namespace = "fiveline", sa = "admin-service-sa" }
   }
 }
 
 resource "aws_iam_role" "app_service" {
   for_each = local.app_services
-  name     = "${local.project}-${each.key}-sa-role"
+  name     = "${local.project}-${each.key}-service-sa-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -640,7 +640,7 @@ resource "aws_iam_role" "app_service" {
 
   tags = {
     Service = each.key
-    Name    = "${local.project}-${each.key}-sa-role"
+    Name    = "${local.project}-${each.key}-service-sa-role"
   }
 }
 
