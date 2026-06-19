@@ -232,7 +232,38 @@ resource "aws_iam_role_policy" "github_actions_artifacts" {
         Effect   = "Allow"
         Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
         Resource = var.kms_arn # nosonar
+      },
+      {
+        Sid    = "ReadCicdParameters"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/fiveline/cicd/*"
       }
     ]
   })
+}
+
+# ── SSM Parameter Store — CI/CD 참조값 자동 관리 ──────────────────────────────
+# GitHub Actions가 이 값들을 런타임에 SSM에서 읽어옴 (수동 Secret 관리 불필요)
+
+resource "aws_ssm_parameter" "artifacts_bucket" {
+  name  = "/fiveline/cicd/artifacts-bucket"
+  type  = "String"
+  value = aws_s3_bucket.artifacts.bucket
+
+  tags = {
+    Name    = "fiveline-cicd-artifacts-bucket"
+    Service = "cicd"
+  }
+}
+
+resource "aws_ssm_parameter" "github_actions_role_arn" {
+  name  = "/fiveline/cicd/github-actions-role-arn"
+  type  = "String"
+  value = aws_iam_role.github_actions.arn
+
+  tags = {
+    Name    = "fiveline-cicd-github-actions-role-arn"
+    Service = "cicd"
+  }
 }
