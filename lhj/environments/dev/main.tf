@@ -53,12 +53,6 @@ module "rds" {
   deletion_protection = false
 }
 
-module "dynamodb" {
-  source       = "../../modules/dynamodb"
-  project_name = var.project_name
-  environment  = var.environment
-}
-
 resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
   name = "dynamodb-aiops-read-policy"
   role = "fiveline-admin-service-sa-role"
