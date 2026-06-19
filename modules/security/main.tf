@@ -120,30 +120,6 @@ resource "aws_sns_topic_subscription" "security_alerts_email" {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# GuardDuty Suppression Filter — 의도된 퍼블릭 리소스 억제
-# ════════════════════════════════════════════════════════════════════════════
-
-# dashboard S3 버킷은 정적 웹사이트 호스팅으로 퍼블릭 접근이 의도된 설계.
-# GuardDuty가 PutBucketPolicy/BlockPublicAccessDisabled를 탐지하지만 정상 동작.
-resource "aws_guardduty_filter" "dashboard_public_access" {
-  detector_id = aws_guardduty_detector.fiveline.id
-  name        = "fiveline-dashboard-public-access-intentional"
-  action      = "ARCHIVE"
-  rank        = 1
-
-  finding_criteria {
-    criterion {
-      field  = "resource.s3BucketDetails.name"
-      equals = ["fiveline-dashboard"]
-    }
-  }
-
-  tags = {
-    Name    = "fiveline-dashboard-public-access-intentional"
-    Service = "security"
-  }
-}
-
 # ════════════════════════════════════════════════════════════════════════════
 # CloudTrail + VPC Flow Logs
 # ════════════════════════════════════════════════════════════════════════════

@@ -37,8 +37,8 @@ output "alarm_topic_arn" {
 # ──────────────────────────────────────────────
 
 output "dashboard_url" {
-  value       = "http://${aws_s3_bucket_website_configuration.dashboard.website_endpoint}"
-  description = "대시보드 웹 URL (브라우저에서 열기)"
+  value       = "https://data.fiveline.store"
+  description = "대시보드 웹 URL (CloudFront HTTPS)"
 }
 
 output "dashboard_api_url" {
@@ -47,8 +47,18 @@ output "dashboard_api_url" {
 }
 
 output "dashboard_data_url" {
-  value       = "http://${aws_s3_bucket_website_configuration.dashboard.website_endpoint}/data.json"
-  description = "S3에 적재되는 데이터 JSON URL"
+  value       = "https://data.fiveline.store/data.json"
+  description = "S3에 적재되는 데이터 JSON URL (CloudFront 경유)"
+}
+
+output "dashboard_cloudfront_domain_name" {
+  description = "대시보드 CloudFront 도메인명 (Route53 alias 레코드용)"
+  value       = aws_cloudfront_distribution.dashboard.domain_name
+}
+
+output "dashboard_cloudfront_hosted_zone_id" {
+  description = "대시보드 CloudFront hosted zone ID (Route53 alias 레코드용)"
+  value       = aws_cloudfront_distribution.dashboard.hosted_zone_id
 }
 
 output "dashboard_bucket_name" {

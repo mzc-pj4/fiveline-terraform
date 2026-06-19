@@ -124,3 +124,13 @@ variable "langgraph_lambda_function_name" {
   description = "jihoo 데이터 파이프라인 모듈의 langgraph_agent Lambda 함수명"
   type        = string
 }
+
+variable "cloudfront_waf_arn" {
+  description = "CloudFront WAF ARN (us-east-1 scope) — dashboard CloudFront에 연결"
+  type        = string
+}
+
+variable "acm_cert_arn" {
+  description = "ACM 인증서 ARN (us-east-1, *.fiveline.store) — dashboard CloudFront HTTPS용"
+  type        = string
+}

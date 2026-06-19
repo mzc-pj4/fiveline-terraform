@@ -28,3 +28,13 @@ output "cloudfront_origin_secret" {
   value       = random_password.cloudfront_origin_secret.result
   sensitive   = true
 }
+
+output "acm_cert_arn" {
+  description = "ACM 인증서 ARN (us-east-1, *.fiveline.store 와일드카드)"
+  value       = aws_acm_certificate_validation.fiveline.certificate_arn
+}
+
+output "hosted_zone_id" {
+  description = "Route53 Hosted Zone ID (fiveline.store)"
+  value       = data.aws_route53_zone.fiveline.zone_id
+}

@@ -651,23 +651,75 @@ resource "aws_s3_bucket" "dashboard" {
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "dashboard" { # nosonar — 정적 웹사이트 호스팅용 퍼블릭 버킷 (의도된 설계)
+resource "aws_s3_bucket_public_access_block" "dashboard" {
   bucket                  = aws_s3_bucket.dashboard.id
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_website_configuration" "dashboard" {
-  bucket = aws_s3_bucket.dashboard.id
+resource "aws_cloudfront_origin_access_control" "dashboard" {
+  name                              = "${local.project}-dashboard-oac"
+  description                       = "OAC for fiveline-dashboard S3 bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
 
-  index_document {
-    suffix = "index.html"
+resource "aws_cloudfront_distribution" "dashboard" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Fiveline Data Analytics Dashboard"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_200"
+  aliases             = ["data.fiveline.store"]
+  web_acl_id          = var.cloudfront_waf_arn
+
+  origin {
+    domain_name              = aws_s3_bucket.dashboard.bucket_regional_domain_name
+    origin_id                = "s3-dashboard"
+    origin_access_control_id = aws_cloudfront_origin_access_control.dashboard.id
   }
 
-  error_document {
-    key = "index.html"
+  default_cache_behavior {
+    target_origin_id       = "s3-dashboard"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_cert_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    Name    = "${local.project}-dashboard-cloudfront"
+    Service = "dashboard"
   }
 }
 
@@ -678,11 +730,16 @@ resource "aws_s3_bucket_policy" "dashboard" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "PublicRead"
+      Sid       = "AllowCloudFrontOAC"
       Effect    = "Allow"
-      Principal = "*" # nosonar — 정적 웹사이트 퍼블릭 읽기 (의도된 설계)
+      Principal = { Service = "cloudfront.amazonaws.com" }
       Action    = "s3:GetObject"
       Resource  = "${aws_s3_bucket.dashboard.arn}/*"
+      Condition = {
+        StringEquals = {
+          "AWS:SourceArn" = aws_cloudfront_distribution.dashboard.arn
+        }
+      }
     }]
   })
 }

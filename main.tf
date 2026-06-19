@@ -148,6 +148,24 @@ module "observability" {
   # 2-phase 변수 (1차="" → ai apply 후 2차에서 실제 값 주입)
   langgraph_lambda_arn           = var.langgraph_lambda_arn
   langgraph_lambda_function_name = var.langgraph_lambda_name
+
+  # CloudFront 설정 (cdn 모듈 output)
+  cloudfront_waf_arn = module.cdn.cloudfront_waf_arn
+  acm_cert_arn       = module.cdn.acm_cert_arn
+}
+
+# ── data.fiveline.store Route53 A 레코드 (observability → cdn 역방향 의존성 방지용 루트 배치) ──
+
+resource "aws_route53_record" "dashboard_data" {
+  zone_id = module.cdn.hosted_zone_id
+  name    = "data.fiveline.store"
+  type    = "A"
+
+  alias {
+    name                   = module.observability.dashboard_cloudfront_domain_name
+    zone_id                = module.observability.dashboard_cloudfront_hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 # ── 10. CI/CD (lhj — ECR + GitHub Actions OIDC) ──────────────────────────────
