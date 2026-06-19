@@ -947,3 +947,57 @@ resource "aws_vpc_security_group_ingress_rule" "eks_api_from_bastion" {
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.bastion_sg.id
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# Fluent Bit — EKS 로그 수집 (EKS Pod Identity)
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_iam_role" "fluent_bit" {
+  name = "${local.project}-fluent-bit-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }]
+  })
+
+  tags = {
+    Name = "${local.project}-fluent-bit-role"
+  }
+}
+
+resource "aws_iam_role_policy" "fluent_bit" {
+  name = "${local.project}-fluent-bit-policy"
+  role = aws_iam_role.fluent_bit.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:DescribeLogGroups",
+        "logs:PutRetentionPolicy"
+      ]
+      Resource = "*" # nosonar — CloudWatch Logs 전체 접근 필요 (로그 그룹 자동 생성)
+    }]
+  })
+}
+
+resource "aws_eks_pod_identity_association" "fluent_bit" {
+  cluster_name    = aws_eks_cluster.fiveline_eks.name
+  namespace       = "amazon-cloudwatch"
+  service_account = "fluent-bit"
+  role_arn        = aws_iam_role.fluent_bit.arn
+}
