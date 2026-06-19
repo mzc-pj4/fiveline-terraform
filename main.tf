@@ -157,5 +157,5 @@ module "cicd" {
 
   github_org   = var.github_org
   github_repos = var.github_repos
-  kms_arn      = module.kms.secrets_key_arn
+  kms_arn      = module.kms.secrets_manager_arn
 }

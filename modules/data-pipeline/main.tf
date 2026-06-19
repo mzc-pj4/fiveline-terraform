@@ -712,8 +712,6 @@ resource "aws_iam_role_policy" "resource_checker_custom" {
 data "aws_s3_object" "resource_checker_zip" {
   bucket = var.artifacts_bucket
   key    = "lambda/data-pipeline/resource-checker.zip"
-}/resource-checker"
-  output_path = "${var.lambda_src_path}/resource-checker.zip"
 }
 
 resource "aws_lambda_function" "resource_checker" {
@@ -824,8 +822,6 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
 data "aws_s3_object" "summary_writer_zip" {
   bucket = var.artifacts_bucket
   key    = "lambda/data-pipeline/summary-writer.zip"
-}/summary-writer"
-  output_path = "${var.lambda_src_path}/summary-writer.zip"
 }
 
 resource "aws_lambda_function" "summary_writer" {
@@ -908,8 +904,6 @@ resource "aws_iam_role_policy" "metrics_collector_custom" {
 data "aws_s3_object" "metrics_collector_zip" {
   bucket = var.artifacts_bucket
   key    = "lambda/data-pipeline/metrics-collector.zip"
-}/metrics-collector"
-  output_path = "${var.lambda_src_path}/metrics-collector.zip"
 }
 
 resource "aws_lambda_function" "metrics_collector" {
@@ -1040,8 +1034,6 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
 data "aws_s3_object" "pipeline_orchestrator_zip" {
   bucket = var.artifacts_bucket
   key    = "lambda/data-pipeline/pipeline-orchestrator.zip"
-}/pipeline-orchestrator"
-  output_path = "${var.lambda_src_path}/pipeline-orchestrator.zip"
 }
 
 resource "aws_lambda_function" "pipeline_orchestrator" {
