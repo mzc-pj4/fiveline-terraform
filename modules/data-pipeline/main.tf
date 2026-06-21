@@ -56,6 +56,28 @@ resource "aws_s3_bucket_public_access_block" "data_lake" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_policy" "data_lake_https_only" {
+  bucket     = aws_s3_bucket.data_lake.id
+  depends_on = [aws_s3_bucket_public_access_block.data_lake]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "DenyHTTP"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource = [
+        aws_s3_bucket.data_lake.arn,
+        "${aws_s3_bucket.data_lake.arn}/*",
+      ]
+      Condition = {
+        Bool = { "aws:SecureTransport" = "false" }
+      }
+    }]
+  })
+}
+
 # ── Firehose IAM Role ─────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "firehose" {
