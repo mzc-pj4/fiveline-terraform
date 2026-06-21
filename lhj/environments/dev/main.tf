@@ -36,6 +36,8 @@ module "github_actions_oidc" {
   github_org   = "mzc-pj4"
   github_repos = ["fiveline-backend", "fiveline-frontend"]
   ecr_prefix   = "fiveline-ecr"
+  # platform repo는 김지호(데이터 파이프라인) Role에서만 push 가능하도록 제외
+  ecr_repositories = ["user-service", "product-service", "order-service", "frontend", "admin-service", "tools/python"]
   # bedrock invoke policy added for AIOps
 }
 
