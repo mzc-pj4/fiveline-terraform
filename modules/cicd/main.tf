@@ -140,7 +140,7 @@ resource "aws_iam_role_policy" "eks" {
       Sid      = "EKSDescribe"
       Effect   = "Allow"
       Action   = ["eks:DescribeCluster"]
-      Resource = "*" # nosonar
+      Resource = "arn:aws:eks:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/fiveline-eks"
     }]
   })
 }
