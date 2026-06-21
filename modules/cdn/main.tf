@@ -80,6 +80,14 @@ resource "aws_s3_bucket_policy" "frontend" {
   depends_on = [aws_s3_bucket_public_access_block.frontend]
 }
 
+resource "aws_s3_bucket_logging" "frontend" {
+  bucket        = aws_s3_bucket.frontend.id
+  target_bucket = aws_s3_bucket.cloudfront_logs.id
+  target_prefix = "s3-frontend/"
+
+  depends_on = [aws_s3_bucket_policy.cloudfront_logs]
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # CloudFront 로그 버킷 (Standard Logging v2)
 # ════════════════════════════════════════════════════════════════════════════
@@ -161,6 +169,18 @@ resource "aws_s3_bucket_policy" "cloudfront_logs" {
         Principal = { Service = "delivery.logs.amazonaws.com" }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.cloudfront_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid       = "AllowS3AccessLogDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudfront_logs.arn}/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -586,6 +606,12 @@ resource "aws_cloudfront_distribution" "main" {
 
   web_acl_id = aws_wafv2_web_acl.cloudfront.arn
 
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "cloudfront-main/"
+  }
+
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "s3-frontend"
@@ -690,6 +716,12 @@ resource "aws_cloudfront_distribution" "admin" {
   aliases             = ["dashboard.fiveline.store"]
 
   web_acl_id = aws_wafv2_web_acl.cloudfront.arn
+
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "cloudfront-admin/"
+  }
 
   origin {
     domain_name = var.alb_dns_name

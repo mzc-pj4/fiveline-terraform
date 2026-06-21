@@ -641,6 +641,46 @@ resource "aws_cloudwatch_metric_alarm" "burn_rate_1h" {
 # 네이밍: mzc-pj4-${local.owner}-xxx-${local.env} → ${local.project}-xxx
 # ══════════════════════════════════════════════════════════════════════════════
 
+resource "aws_s3_bucket" "access_logs" {
+  bucket        = "${local.project}-obs-access-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+  tags = { Service = "logging", Name = "${local.project}-obs-access-logs" }
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  bucket                  = aws_s3_bucket.access_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "access_logs" {
+  bucket     = aws_s3_bucket.access_logs.id
+  depends_on = [aws_s3_bucket_public_access_block.access_logs]
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowS3LogDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs.arn}/*"
+        Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
+      },
+      {
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.access_logs.arn, "${aws_s3_bucket.access_logs.arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+    ]
+  })
+}
+
 # ── Dashboard S3 Static Hosting Bucket ───────────────────────────────────────
 
 resource "aws_s3_bucket" "dashboard" {
@@ -658,6 +698,13 @@ resource "aws_s3_bucket_public_access_block" "dashboard" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "dashboard" {
+  bucket        = aws_s3_bucket.dashboard.id
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "dashboard/"
+  depends_on    = [aws_s3_bucket_policy.access_logs]
 }
 
 resource "aws_cloudfront_origin_access_control" "dashboard" {
@@ -914,10 +961,19 @@ resource "aws_apigatewayv2_route" "dashboard_api_default" {
   target    = "integrations/${aws_apigatewayv2_integration.dashboard_api_lambda.id}"
 }
 
+resource "aws_cloudwatch_log_group" "dashboard_api" {
+  name              = "/aws/apigateway/${local.project}-dashboard-api"
+  retention_in_days = 30
+}
+
 resource "aws_apigatewayv2_stage" "dashboard_api_default" {
   api_id      = aws_apigatewayv2_api.dashboard_api.id
   name        = "$default"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.dashboard_api.arn
+  }
 
   tags = {
     Service = "dashboard"

@@ -188,6 +188,53 @@ resource "aws_s3_bucket_public_access_block" "artifacts" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket" "access_logs" {
+  bucket        = "${var.project_name}-access-logs-${local.account_id}"
+  force_destroy = true
+  tags = { Service = "logging", Name = "${var.project_name}-access-logs" }
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  bucket                  = aws_s3_bucket.access_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "access_logs" {
+  bucket     = aws_s3_bucket.access_logs.id
+  depends_on = [aws_s3_bucket_public_access_block.access_logs]
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowS3LogDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs.arn}/*"
+        Condition = { StringEquals = { "aws:SourceAccount" = local.account_id } }
+      },
+      {
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.access_logs.arn, "${aws_s3_bucket.access_logs.arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_logging" "artifacts" {
+  bucket        = aws_s3_bucket.artifacts.id
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "artifacts/"
+  depends_on    = [aws_s3_bucket_policy.access_logs]
+}
+
 resource "aws_s3_bucket_policy" "artifacts_https_only" {
   bucket     = aws_s3_bucket.artifacts.id
   depends_on = [aws_s3_bucket_public_access_block.artifacts]
