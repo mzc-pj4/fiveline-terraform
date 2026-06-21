@@ -24,7 +24,8 @@ locals {
 # ──────────────────────────────────────────────
 
 resource "aws_sns_topic" "alarm" {
-  name = "fiveline-prod-alarm-topic"
+  name              = "fiveline-prod-alarm-topic"
+  kms_master_key_id = "alias/aws/sns"
 
   tags = {
     Name    = "fiveline-prod-alarm-topic"
@@ -729,18 +730,33 @@ resource "aws_s3_bucket_policy" "dashboard" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "AllowCloudFrontOAC"
-      Effect    = "Allow"
-      Principal = { Service = "cloudfront.amazonaws.com" }
-      Action    = "s3:GetObject"
-      Resource  = "${aws_s3_bucket.dashboard.arn}/*"
-      Condition = {
-        StringEquals = {
-          "AWS:SourceArn" = aws_cloudfront_distribution.dashboard.arn
+    Statement = [
+      {
+        Sid       = "AllowCloudFrontOAC"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.dashboard.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.dashboard.arn
+          }
         }
-      }
-    }]
+      },
+      {
+        Sid       = "DenyHTTP"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.dashboard.arn,
+          "${aws_s3_bucket.dashboard.arn}/*",
+        ]
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+    ]
   })
 }
 
