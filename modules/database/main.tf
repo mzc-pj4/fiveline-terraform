@@ -278,7 +278,7 @@ resource "aws_db_instance" "rds_replica" {
 
   ca_cert_identifier = "rds-ca-rsa2048-g1"
 
-  backup_retention_period = 0
+  backup_retention_period = 7
   skip_final_snapshot     = true
   apply_immediately       = true
 
@@ -309,7 +309,7 @@ resource "aws_db_instance" "rds_replica_a" {
 
   ca_cert_identifier = "rds-ca-rsa2048-g1"
 
-  backup_retention_period = 0
+  backup_retention_period = 7
   skip_final_snapshot     = true
   apply_immediately       = true
 

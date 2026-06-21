@@ -670,6 +670,14 @@ resource "aws_s3_bucket_policy" "access_logs" {
         Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
       },
       {
+        Sid       = "AllowCloudFrontLogDelivery"
+        Effect    = "Allow"
+        Principal = { Service = "delivery.logs.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.access_logs.arn}/*"
+        Condition = { StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id } }
+      },
+      {
         Sid       = "DenyHTTP"
         Effect    = "Deny"
         Principal = "*"
@@ -723,6 +731,12 @@ resource "aws_cloudfront_distribution" "dashboard" {
   price_class         = "PriceClass_200"
   aliases             = ["data.fiveline.store"]
   web_acl_id          = var.cloudfront_waf_arn
+
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.access_logs.bucket_domain_name
+    prefix          = "cloudfront-dashboard/"
+  }
 
   origin {
     domain_name              = aws_s3_bucket.dashboard.bucket_regional_domain_name
