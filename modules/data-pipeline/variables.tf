@@ -14,3 +14,9 @@ variable "dashboard_builder_lambda_name" {
   description = "dashboard_builder Lambda function_name — pipeline_orchestrator 환경변수 주입용"
   type        = string
 }
+
+variable "alb_lb_name" {
+  description = "CloudWatch ALB 메트릭 조회용 LoadBalancer 차원값 (app/{name}/{id} 형식)"
+  type        = string
+  default     = "app/fiveline-alb/46f3ca3db6fcf6f3"
+}

@@ -810,10 +810,16 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
         ]
       },
       {
-        Sid      = "DynamoDBWrite"
-        Effect   = "Allow"
-        Action   = ["dynamodb:PutItem"]
+        Sid    = "DynamoDBWrite"
+        Effect = "Allow"
+        Action = ["dynamodb:PutItem", "dynamodb:Scan"]
         Resource = aws_dynamodb_table.dashboard_summary.arn
+      },
+      {
+        Sid      = "CloudWatchGetMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData"]
+        Resource = "*" # nosonar
       },
     ]
   })
@@ -838,9 +844,11 @@ resource "aws_lambda_function" "summary_writer" {
 
   environment {
     variables = {
-      ATHENA_DB     = aws_glue_catalog_database.data_lake.name
-      ATHENA_OUTPUT = "s3://${aws_s3_bucket.data_lake.bucket}/athena-results/"
-      TABLE_NAME    = aws_dynamodb_table.dashboard_summary.name
+      ATHENA_DB      = aws_glue_catalog_database.data_lake.name
+      ATHENA_OUTPUT  = "s3://${aws_s3_bucket.data_lake.bucket}/athena-results/"
+      TABLE_NAME     = aws_dynamodb_table.dashboard_summary.name
+      MONITORING_SVC = "ecommerce"
+      ALB_LB_NAME    = var.alb_lb_name
     }
   }
 

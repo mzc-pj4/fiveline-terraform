@@ -93,6 +93,7 @@ module "data_pipeline" {
   artifacts_bucket              = module.cicd.artifacts_bucket
   dashboard_builder_lambda_arn  = var.dashboard_builder_lambda_arn
   dashboard_builder_lambda_name = var.dashboard_builder_lambda_name
+  alb_lb_name                   = var.alb_lb_name
 }
 
 # ── 8. AI (jihoo — Bedrock, LangGraph, Report Embedder) ───────────────────────
