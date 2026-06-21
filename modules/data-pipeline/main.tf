@@ -17,6 +17,7 @@ locals {
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # ── S3 Data Lake Bucket ───────────────────────────────────────────────────────
 
@@ -851,7 +852,7 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*" # nosonar
+        Resource = "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/primary"
       },
       {
         Sid    = "GlueCatalogRead"
@@ -862,7 +863,11 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*" # nosonar
+        Resource = [
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/${aws_glue_catalog_database.data_lake.name}",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${aws_glue_catalog_database.data_lake.name}/*",
+        ]
       },
       {
         Sid    = "S3DataLakeReadWrite"
@@ -1075,10 +1080,14 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Resource = aws_glue_job.cleansed_to_aggregated.arn
       },
       {
-        Sid      = "GlueCatalog"
-        Effect   = "Allow"
-        Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions", "glue:BatchCreatePartition", "glue:CreatePartition", "glue:UpdatePartition"]
-        Resource = "*" # nosonar
+        Sid    = "GlueCatalog"
+        Effect = "Allow"
+        Action = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions", "glue:BatchCreatePartition", "glue:CreatePartition", "glue:UpdatePartition"]
+        Resource = [
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/${aws_glue_catalog_database.data_lake.name}",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${aws_glue_catalog_database.data_lake.name}/*",
+        ]
       },
       {
         Sid    = "InvokeLambda"
@@ -1093,7 +1102,7 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Sid      = "AthenaQuery"
         Effect   = "Allow"
         Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
-        Resource = "*" # nosonar
+        Resource = "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/primary"
       },
       {
         Sid    = "AthenaS3"

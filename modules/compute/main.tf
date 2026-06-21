@@ -264,7 +264,7 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect   = "Allow"
         Action   = ["iam:CreateServiceLinkedRole"]
-        Resource = "*" # nosonar
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/elasticloadbalancing.amazonaws.com/*"
         Condition = {
           StringEquals = { "iam:AWSServiceName" = "elasticloadbalancing.amazonaws.com" }
         }
@@ -992,10 +992,12 @@ resource "aws_iam_role_policy" "fluent_bit" {
         "logs:CreateLogStream",
         "logs:PutLogEvents",
         "logs:DescribeLogStreams",
-        "logs:DescribeLogGroups",
         "logs:PutRetentionPolicy"
       ]
-      Resource = "*" # nosonar — CloudWatch Logs 전체 접근 필요 (로그 그룹 자동 생성)
+      Resource = [
+        "arn:aws:logs:ap-northeast-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/eks/${local.cluster_name}/*",
+        "arn:aws:logs:ap-northeast-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/eks/${local.cluster_name}/*:*",
+      ]
     }]
   })
 }

@@ -3,6 +3,7 @@
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # ════════════════════════════════════════════════════════════════════════════
 # DynamoDB: AI 전용 테이블
@@ -385,13 +386,17 @@ resource "aws_iam_role_policy" "bedrock_agent_action_custom" {
           "athena:GetQueryExecution",
           "athena:GetQueryResults",
         ]
-        Resource = "*" # nosonar
+        Resource = "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/primary"
       },
       {
-        Sid      = "GlueCatalogRead"
-        Effect   = "Allow"
-        Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*" # nosonar
+        Sid    = "GlueCatalogRead"
+        Effect = "Allow"
+        Action = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
+        Resource = [
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/${var.glue_database_name}",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.glue_database_name}/*",
+        ]
       },
       {
         Sid    = "S3DataLake"
@@ -535,7 +540,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*" # nosonar
+        Resource = "arn:aws:athena:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:workgroup/primary"
       },
       {
         Sid    = "GlueCatalogRead"
@@ -546,7 +551,11 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*" # nosonar
+        Resource = [
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/${var.glue_database_name}",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.glue_database_name}/*",
+        ]
       },
       {
         Sid    = "S3DataLake"
