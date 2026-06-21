@@ -13,7 +13,7 @@ module "network" {
 module "ecr" {
   source        = "../../modules/ecr"
   project_name  = "fiveline-ecr"
-  service_names = ["user-service", "product-service", "order-service", "frontend"]
+  service_names = ["user-service", "product-service", "order-service", "frontend", "platform"]
 }
 
 module "eks" {
