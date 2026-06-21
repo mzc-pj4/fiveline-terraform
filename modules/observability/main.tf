@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 # modules/observability/main.tf
 # hsh 알람/Lambda/DynamoDB + jihoo 대시보드 통합 모듈
 # ══════════════════════════════════════════════════════════════════════════════
@@ -188,19 +188,16 @@ resource "aws_iam_role_policy" "alarm_handler" {
   })
 }
 
-# NOTE: modules/observability/lambda/alarm_handler/ 디렉토리가 존재해야 합니다.
-#       원본 위치: hsh/lambda/alarm_handler/
-#       복사 명령: Copy-Item -Recurse hsh\lambda\alarm_handler modules\observability\lambda\alarm_handler
-data "archive_file" "alarm_handler" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda/alarm_handler"
-  output_path = "${path.module}/lambda/alarm_handler.zip"
+data "aws_s3_object" "alarm_handler_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/observability/alarm-handler.zip"
 }
 
 resource "aws_lambda_function" "alarm_handler" {
   function_name    = "mzc-pj4-prod-alarm-handler"
-  filename         = data.archive_file.alarm_handler.output_path
-  source_code_hash = data.archive_file.alarm_handler.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/observability/alarm-handler.zip"
+  source_code_hash = data.aws_s3_object.alarm_handler_zip.etag
   role             = aws_iam_role.alarm_handler.arn
   handler          = "index.handler"
   runtime          = "python3.12"
@@ -656,21 +653,73 @@ resource "aws_s3_bucket" "dashboard" {
 
 resource "aws_s3_bucket_public_access_block" "dashboard" {
   bucket                  = aws_s3_bucket.dashboard.id
-  block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_website_configuration" "dashboard" {
-  bucket = aws_s3_bucket.dashboard.id
+resource "aws_cloudfront_origin_access_control" "dashboard" {
+  name                              = "${local.project}-dashboard-oac"
+  description                       = "OAC for fiveline-dashboard S3 bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
 
-  index_document {
-    suffix = "index.html"
+resource "aws_cloudfront_distribution" "dashboard" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Fiveline Data Analytics Dashboard"
+  default_root_object = "index.html"
+  price_class         = "PriceClass_200"
+  aliases             = ["data.fiveline.store"]
+  web_acl_id          = var.cloudfront_waf_arn
+
+  origin {
+    domain_name              = aws_s3_bucket.dashboard.bucket_regional_domain_name
+    origin_id                = "s3-dashboard"
+    origin_access_control_id = aws_cloudfront_origin_access_control.dashboard.id
   }
 
-  error_document {
-    key = "index.html"
+  default_cache_behavior {
+    target_origin_id       = "s3-dashboard"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_cert_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    Name    = "${local.project}-dashboard-cloudfront"
+    Service = "dashboard"
   }
 }
 
@@ -681,31 +730,22 @@ resource "aws_s3_bucket_policy" "dashboard" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "PublicRead"
+      Sid       = "AllowCloudFrontOAC"
       Effect    = "Allow"
-      Principal = "*"
+      Principal = { Service = "cloudfront.amazonaws.com" }
       Action    = "s3:GetObject"
       Resource  = "${aws_s3_bucket.dashboard.arn}/*"
+      Condition = {
+        StringEquals = {
+          "AWS:SourceArn" = aws_cloudfront_distribution.dashboard.arn
+        }
+      }
     }]
   })
 }
 
-# 파일 자동 업로드 (변경 시 etag로 자동 감지)
-resource "aws_s3_object" "dashboard_html" {
-  bucket       = aws_s3_bucket.dashboard.id
-  key          = "index.html"
-  source       = "${path.module}/dashboard-web/index.html"
-  content_type = "text/html; charset=utf-8"
-  etag         = filemd5("${path.module}/dashboard-web/index.html")
-}
-
-resource "aws_s3_object" "dashboard_js" {
-  bucket       = aws_s3_bucket.dashboard.id
-  key          = "app.js"
-  source       = "${path.module}/dashboard-web/app.js"
-  content_type = "application/javascript; charset=utf-8"
-  etag         = filemd5("${path.module}/dashboard-web/app.js")
-}
+# dashboard 파일(index.html, app.js)은 fiveline-frontend 레포의 CI/CD가 S3에 직접 업로드
+# fiveline-frontend/.github/workflows/deploy-dashboard.yml 참고
 
 # ── Dashboard API Lambda IAM ──────────────────────────────────────────────────
 
@@ -756,13 +796,13 @@ resource "aws_iam_role_policy" "dashboard_api_custom" {
           "athena:GetQueryExecution",
           "athena:GetQueryResults",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3AthenaResults"
@@ -785,10 +825,9 @@ resource "aws_iam_role_policy" "dashboard_api_custom" {
 
 # ── Dashboard API Lambda Function ─────────────────────────────────────────────
 
-data "archive_file" "dashboard_api" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-src/dashboard-api"
-  output_path = "${path.module}/lambda-src/dashboard-api.zip"
+data "aws_s3_object" "dashboard_api_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/observability/dashboard-api.zip"
 }
 
 resource "aws_lambda_function" "dashboard_api" {
@@ -799,8 +838,9 @@ resource "aws_lambda_function" "dashboard_api" {
   timeout       = 60
   memory_size   = 512
 
-  filename         = data.archive_file.dashboard_api.output_path
-  source_code_hash = data.archive_file.dashboard_api.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/observability/dashboard-api.zip"
+  source_code_hash = data.aws_s3_object.dashboard_api_zip.etag
 
   environment {
     variables = {
@@ -925,13 +965,13 @@ resource "aws_iam_role_policy" "dashboard_builder_custom" {
         Sid      = "AthenaQuery"
         Effect   = "Allow"
         Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLakeRead"
@@ -952,10 +992,9 @@ resource "aws_iam_role_policy" "dashboard_builder_custom" {
   })
 }
 
-data "archive_file" "dashboard_builder" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-src/dashboard-builder"
-  output_path = "${path.module}/lambda-src/dashboard-builder.zip"
+data "aws_s3_object" "dashboard_builder_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/observability/dashboard-builder.zip"
 }
 
 resource "aws_lambda_function" "dashboard_builder" {
@@ -966,8 +1005,9 @@ resource "aws_lambda_function" "dashboard_builder" {
   timeout       = 120
   memory_size   = 512
 
-  filename         = data.archive_file.dashboard_builder.output_path
-  source_code_hash = data.archive_file.dashboard_builder.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/observability/dashboard-builder.zip"
+  source_code_hash = data.aws_s3_object.dashboard_builder_zip.etag
 
   environment {
     variables = {

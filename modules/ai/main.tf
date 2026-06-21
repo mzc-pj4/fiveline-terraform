@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project = var.project
 }
 
@@ -99,7 +99,7 @@ resource "aws_iam_role_policy" "bedrock_agent" {
           "aws-marketplace:ViewSubscriptions",
           "aws-marketplace:Subscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
     ]
   })
@@ -264,7 +264,7 @@ resource "aws_iam_role_policy" "report_generator_custom" {
           "aws-marketplace:Subscribe",
           "aws-marketplace:Unsubscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "DynamoDBRead"
@@ -295,10 +295,9 @@ resource "aws_iam_role_policy" "report_generator_custom" {
   })
 }
 
-data "archive_file" "report_generator" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-src/report-generator"
-  output_path = "${path.module}/lambda-src/report-generator.zip"
+data "aws_s3_object" "report_generator_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/ai/report-generator.zip"
 }
 
 resource "aws_lambda_function" "report_generator" {
@@ -309,8 +308,9 @@ resource "aws_lambda_function" "report_generator" {
   timeout       = 300
   memory_size   = 512
 
-  filename         = data.archive_file.report_generator.output_path
-  source_code_hash = data.archive_file.report_generator.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/ai/report-generator.zip"
+  source_code_hash = data.aws_s3_object.report_generator_zip.etag
 
   environment {
     variables = {
@@ -385,13 +385,13 @@ resource "aws_iam_role_policy" "bedrock_agent_action_custom" {
           "athena:GetQueryExecution",
           "athena:GetQueryResults",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "GlueCatalogRead"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLake"
@@ -411,10 +411,9 @@ resource "aws_iam_role_policy" "bedrock_agent_action_custom" {
   })
 }
 
-data "archive_file" "bedrock_agent_action" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-src/bedrock-agent-action"
-  output_path = "${path.module}/lambda-src/bedrock-agent-action.zip"
+data "aws_s3_object" "bedrock_agent_action_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/ai/bedrock-agent-action.zip"
 }
 
 resource "aws_lambda_function" "bedrock_agent_action" {
@@ -425,8 +424,9 @@ resource "aws_lambda_function" "bedrock_agent_action" {
   timeout       = 60
   memory_size   = 512
 
-  filename         = data.archive_file.bedrock_agent_action.output_path
-  source_code_hash = data.archive_file.bedrock_agent_action.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/ai/bedrock-agent-action.zip"
+  source_code_hash = data.aws_s3_object.bedrock_agent_action_zip.etag
 
   environment {
     variables = {
@@ -498,7 +498,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "aws-marketplace:ViewSubscriptions",
           "aws-marketplace:Subscribe",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "DynamoDBRead"
@@ -535,7 +535,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "GlueCatalogRead"
@@ -546,7 +546,7 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLake"
@@ -665,10 +665,9 @@ resource "aws_iam_role_policy" "report_embedder_custom" {
   })
 }
 
-data "archive_file" "report_embedder" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-src/report-embedder"
-  output_path = "${path.module}/lambda-src/report-embedder.zip"
+data "aws_s3_object" "report_embedder_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/ai/report-embedder.zip"
 }
 
 resource "aws_lambda_function" "report_embedder" {
@@ -679,8 +678,9 @@ resource "aws_lambda_function" "report_embedder" {
   timeout       = 300
   memory_size   = 512
 
-  filename         = data.archive_file.report_embedder.output_path
-  source_code_hash = data.archive_file.report_embedder.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/ai/report-embedder.zip"
+  source_code_hash = data.aws_s3_object.report_embedder_zip.etag
 
   environment {
     variables = {

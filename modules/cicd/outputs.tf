@@ -12,3 +12,8 @@ output "github_actions_role_arn" {
   description = "IAM Role ARN for GitHub Actions — workflow의 AWS_ROLE_ARN으로 사용"
   value       = aws_iam_role.github_actions.arn
 }
+
+output "artifacts_bucket" {
+  description = "S3 artifact 버킷 이름 — Lambda zip, Glue 스크립트 저장소"
+  value       = aws_s3_bucket.artifacts.bucket
+}

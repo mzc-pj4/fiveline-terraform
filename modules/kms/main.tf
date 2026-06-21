@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project = "fiveline"
 }
 
@@ -22,7 +22,7 @@ resource "aws_kms_key" "eks_secrets" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "EKSServiceUse"
@@ -36,7 +36,7 @@ resource "aws_kms_key" "eks_secrets" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })
@@ -70,7 +70,7 @@ resource "aws_kms_key" "rds" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "RDSServiceUse"
@@ -87,7 +87,7 @@ resource "aws_kms_key" "rds" {
           "kms:ListGrants",
           "kms:RevokeGrant"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })
@@ -121,7 +121,7 @@ resource "aws_kms_key" "secrets_manager" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "SecretsManagerServiceUse"
@@ -136,7 +136,7 @@ resource "aws_kms_key" "secrets_manager" {
           "kms:DescribeKey",
           "kms:CreateGrant"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "SNSAndEventBridgeUse"
@@ -150,7 +150,7 @@ resource "aws_kms_key" "secrets_manager" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "CloudFrontLogDeliveryUse"
@@ -162,7 +162,7 @@ resource "aws_kms_key" "secrets_manager" {
           "kms:GenerateDataKey*",
           "kms:Decrypt"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })

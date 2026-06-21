@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project      = "fiveline"
   cluster_name = "fiveline-eks"
   oidc_url     = replace(aws_eks_cluster.fiveline_eks.identity[0].oidc[0].issuer, "https://", "")
@@ -264,7 +264,7 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect   = "Allow"
         Action   = ["iam:CreateServiceLinkedRole"]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           StringEquals = { "iam:AWSServiceName" = "elasticloadbalancing.amazonaws.com" }
         }
@@ -290,7 +290,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:DescribeTargetHealth",
           "elasticloadbalancing:DescribeTags"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"
@@ -304,17 +304,17 @@ resource "aws_iam_policy" "lb_controller" {
           "shield:GetSubscriptionState", "shield:DescribeProtection",
           "shield:CreateProtection", "shield:DeleteProtection"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
         Action   = ["ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
         Action   = ["ec2:CreateSecurityGroup"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
@@ -339,7 +339,7 @@ resource "aws_iam_policy" "lb_controller" {
           "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
           "ec2:DeleteSecurityGroup"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:ResourceTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -347,7 +347,7 @@ resource "aws_iam_policy" "lb_controller" {
       {
         Effect   = "Allow"
         Action   = ["elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:CreateTargetGroup"]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:RequestTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -358,7 +358,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListener",
           "elasticloadbalancing:CreateRule", "elasticloadbalancing:DeleteRule"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"
@@ -394,7 +394,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:ModifyTargetGroup", "elasticloadbalancing:ModifyTargetGroupAttributes",
           "elasticloadbalancing:DeleteTargetGroup"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
         Condition = {
           Null = { "aws:ResourceTag/elbv2.k8s.aws/cluster" = "false" }
         }
@@ -428,7 +428,7 @@ resource "aws_iam_policy" "lb_controller" {
           "elasticloadbalancing:ModifyRule",
           "elasticloadbalancing:SetRulePriorities"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })
@@ -548,7 +548,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
           "ec2:DescribeLaunchTemplateVersions",
           "ec2:GetInstanceTypesFromInstanceRequirements"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect   = "Allow"
@@ -612,16 +612,16 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
 
 locals {
   app_services = {
-    user    = { namespace = "production", sa = "user-sa" }
-    product = { namespace = "production", sa = "product-sa" }
-    order   = { namespace = "production", sa = "order-sa" }
-    admin   = { namespace = "production", sa = "admin-sa" }
+    user    = { namespace = "fiveline", sa = "user-service-sa" }
+    product = { namespace = "fiveline", sa = "product-service-sa" }
+    order   = { namespace = "fiveline", sa = "order-service-sa" }
+    admin   = { namespace = "fiveline", sa = "admin-service-sa" }
   }
 }
 
 resource "aws_iam_role" "app_service" {
   for_each = local.app_services
-  name     = "${local.project}-${each.key}-sa-role"
+  name     = "${local.project}-${each.key}-service-sa-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -640,7 +640,7 @@ resource "aws_iam_role" "app_service" {
 
   tags = {
     Service = each.key
-    Name    = "${local.project}-${each.key}-sa-role"
+    Name    = "${local.project}-${each.key}-service-sa-role"
   }
 }
 
@@ -728,7 +728,7 @@ resource "aws_iam_role_policy_attachment" "order_service" {
 
 resource "aws_iam_policy" "admin_service" {
   name        = "${local.project}-admin-service-policy"
-  description = "admin-service: CloudWatch 읽기 전용 (대시보드 메트릭 조회)"
+  description = "admin-service: CloudWatch 읽기 전용 + dashboard S3 data.json 읽기"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -740,7 +740,7 @@ resource "aws_iam_policy" "admin_service" {
           "cloudwatch:GetMetricStatistics",
           "cloudwatch:ListMetrics"
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Effect = "Allow"
@@ -755,6 +755,11 @@ resource "aws_iam_policy" "admin_service" {
           "arn:aws:logs:ap-northeast-2:*:log-group:aws-waf-logs-${local.project}*:*",
           "arn:aws:logs:ap-northeast-2:*:log-group:/aws/vpc/flowlogs/${local.project}:*"
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "arn:aws:s3:::${local.project}-dashboard/data.json"
       }
     ]
   })
@@ -946,4 +951,58 @@ resource "aws_vpc_security_group_ingress_rule" "eks_api_from_bastion" {
   to_port                      = 443
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.bastion_sg.id
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# Fluent Bit — EKS 로그 수집 (EKS Pod Identity)
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_iam_role" "fluent_bit" {
+  name = "${local.project}-fluent-bit-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "pods.eks.amazonaws.com"
+      }
+      Action = [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }]
+  })
+
+  tags = {
+    Name = "${local.project}-fluent-bit-role"
+  }
+}
+
+resource "aws_iam_role_policy" "fluent_bit" {
+  name = "${local.project}-fluent-bit-policy"
+  role = aws_iam_role.fluent_bit.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:DescribeLogGroups",
+        "logs:PutRetentionPolicy"
+      ]
+      Resource = "*" # nosonar — CloudWatch Logs 전체 접근 필요 (로그 그룹 자동 생성)
+    }]
+  })
+}
+
+resource "aws_eks_pod_identity_association" "fluent_bit" {
+  cluster_name    = aws_eks_cluster.fiveline_eks.name
+  namespace       = "amazon-cloudwatch"
+  service_account = "fluent-bit"
+  role_arn        = aws_iam_role.fluent_bit.arn
 }

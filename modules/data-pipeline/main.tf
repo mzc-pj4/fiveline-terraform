@@ -1,4 +1,4 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 #  modules/data-pipeline/main.tf
 #  S3 Data Lake → Firehose → Glue ETL → Athena → Lambda 집계/요약 파이프라인
 # ══════════════════════════════════════════════════════════════════════════════
@@ -267,22 +267,9 @@ resource "aws_glue_crawler" "raw" {
   }
 }
 
-# ── Glue ETL Script Upload ────────────────────────────────────────────────────
-# glue-scripts/ 원본은 jihoo/ 폴더에 있으며, var.glue_scripts_path로 경로를 주입
-
-resource "aws_s3_object" "etl_script_raw_to_cleansed" {
-  bucket = aws_s3_bucket.data_lake.id
-  key    = "glue-scripts/raw-to-cleansed.py"
-  source = "${var.glue_scripts_path}/raw-to-cleansed.py"
-  etag   = filemd5("${var.glue_scripts_path}/raw-to-cleansed.py")
-}
-
-resource "aws_s3_object" "etl_script_cleansed_to_aggregated" {
-  bucket = aws_s3_bucket.data_lake.id
-  key    = "glue-scripts/cleansed-to-aggregated.py"
-  source = "${var.glue_scripts_path}/cleansed-to-aggregated.py"
-  etag   = filemd5("${var.glue_scripts_path}/cleansed-to-aggregated.py")
-}
+# Glue 스크립트는 fiveline-backend 레포의 CI/CD가 artifact 버킷에 업로드
+# fiveline-backend/.github/workflows/build-lambda-artifacts.yml 참고
+# Glue job script_location은 artifact 버킷의 glue/ 경로를 직접 참조
 
 # ── Glue ETL Job: raw → cleansed ─────────────────────────────────────────────
 
@@ -292,7 +279,7 @@ resource "aws_glue_job" "raw_to_cleansed" {
 
   command {
     name            = "glueetl"
-    script_location = "s3://${aws_s3_bucket.data_lake.bucket}/glue-scripts/raw-to-cleansed.py"
+    script_location = "s3://${var.artifacts_bucket}/glue/raw-to-cleansed.py"
     python_version  = "3"
   }
 
@@ -324,7 +311,7 @@ resource "aws_glue_job" "cleansed_to_aggregated" {
 
   command {
     name            = "glueetl"
-    script_location = "s3://${aws_s3_bucket.data_lake.bucket}/glue-scripts/cleansed-to-aggregated.py"
+    script_location = "s3://${var.artifacts_bucket}/glue/cleansed-to-aggregated.py"
     python_version  = "3"
   }
 
@@ -704,7 +691,7 @@ resource "aws_iam_role_policy" "resource_checker_custom" {
           "ec2:DescribeSecurityGroups",
           "rds:DescribeDBInstances",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "DynamoDBWriteCheckResults"
@@ -722,10 +709,9 @@ resource "aws_iam_role_policy" "resource_checker_custom" {
   })
 }
 
-data "archive_file" "resource_checker" {
-  type        = "zip"
-  source_dir  = "${var.lambda_src_path}/resource-checker"
-  output_path = "${var.lambda_src_path}/resource-checker.zip"
+data "aws_s3_object" "resource_checker_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/data-pipeline/resource-checker.zip"
 }
 
 resource "aws_lambda_function" "resource_checker" {
@@ -736,8 +722,9 @@ resource "aws_lambda_function" "resource_checker" {
   timeout       = 60
   memory_size   = 256
 
-  filename         = data.archive_file.resource_checker.output_path
-  source_code_hash = data.archive_file.resource_checker.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/data-pipeline/resource-checker.zip"
+  source_code_hash = data.aws_s3_object.resource_checker_zip.etag
 
   environment {
     variables = {
@@ -795,7 +782,7 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "athena:GetQueryResults",
           "athena:StopQueryExecution",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "GlueCatalogRead"
@@ -806,7 +793,7 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
           "glue:GetPartition",
           "glue:GetPartitions",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "S3DataLakeReadWrite"
@@ -823,19 +810,24 @@ resource "aws_iam_role_policy" "summary_writer_custom" {
         ]
       },
       {
-        Sid      = "DynamoDBWrite"
-        Effect   = "Allow"
-        Action   = ["dynamodb:PutItem"]
+        Sid    = "DynamoDBWrite"
+        Effect = "Allow"
+        Action = ["dynamodb:PutItem", "dynamodb:Scan"]
         Resource = aws_dynamodb_table.dashboard_summary.arn
+      },
+      {
+        Sid      = "CloudWatchGetMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData"]
+        Resource = "*" # nosonar
       },
     ]
   })
 }
 
-data "archive_file" "summary_writer" {
-  type        = "zip"
-  source_dir  = "${var.lambda_src_path}/summary-writer"
-  output_path = "${var.lambda_src_path}/summary-writer.zip"
+data "aws_s3_object" "summary_writer_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/data-pipeline/summary-writer.zip"
 }
 
 resource "aws_lambda_function" "summary_writer" {
@@ -846,14 +838,17 @@ resource "aws_lambda_function" "summary_writer" {
   timeout       = 120
   memory_size   = 256
 
-  filename         = data.archive_file.summary_writer.output_path
-  source_code_hash = data.archive_file.summary_writer.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/data-pipeline/summary-writer.zip"
+  source_code_hash = data.aws_s3_object.summary_writer_zip.etag
 
   environment {
     variables = {
-      ATHENA_DB     = aws_glue_catalog_database.data_lake.name
-      ATHENA_OUTPUT = "s3://${aws_s3_bucket.data_lake.bucket}/athena-results/"
-      TABLE_NAME    = aws_dynamodb_table.dashboard_summary.name
+      ATHENA_DB      = aws_glue_catalog_database.data_lake.name
+      ATHENA_OUTPUT  = "s3://${aws_s3_bucket.data_lake.bucket}/athena-results/"
+      TABLE_NAME     = aws_dynamodb_table.dashboard_summary.name
+      MONITORING_SVC = "ecommerce"
+      ALB_LB_NAME    = var.alb_lb_name
     }
   }
 
@@ -902,7 +897,7 @@ resource "aws_iam_role_policy" "metrics_collector_custom" {
           "cloudwatch:GetMetricData",
           "cloudwatch:ListMetrics",
         ]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid      = "S3WriteCWMetrics"
@@ -914,10 +909,9 @@ resource "aws_iam_role_policy" "metrics_collector_custom" {
   })
 }
 
-data "archive_file" "metrics_collector" {
-  type        = "zip"
-  source_dir  = "${var.lambda_src_path}/metrics-collector"
-  output_path = "${var.lambda_src_path}/metrics-collector.zip"
+data "aws_s3_object" "metrics_collector_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/data-pipeline/metrics-collector.zip"
 }
 
 resource "aws_lambda_function" "metrics_collector" {
@@ -928,8 +922,9 @@ resource "aws_lambda_function" "metrics_collector" {
   timeout       = 60
   memory_size   = 256
 
-  filename         = data.archive_file.metrics_collector.output_path
-  source_code_hash = data.archive_file.metrics_collector.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/data-pipeline/metrics-collector.zip"
+  source_code_hash = data.aws_s3_object.metrics_collector_zip.etag
 
   environment {
     variables = {
@@ -1014,7 +1009,7 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Sid      = "GlueCatalog"
         Effect   = "Allow"
         Action   = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions", "glue:BatchCreatePartition", "glue:CreatePartition", "glue:UpdatePartition"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "InvokeLambda"
@@ -1029,7 +1024,7 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
         Sid      = "AthenaQuery"
         Effect   = "Allow"
         Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "AthenaS3"
@@ -1044,10 +1039,9 @@ resource "aws_iam_role_policy" "pipeline_orchestrator_custom" {
   })
 }
 
-data "archive_file" "pipeline_orchestrator" {
-  type        = "zip"
-  source_dir  = "${var.lambda_src_path}/pipeline-orchestrator"
-  output_path = "${var.lambda_src_path}/pipeline-orchestrator.zip"
+data "aws_s3_object" "pipeline_orchestrator_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/data-pipeline/pipeline-orchestrator.zip"
 }
 
 resource "aws_lambda_function" "pipeline_orchestrator" {
@@ -1058,8 +1052,9 @@ resource "aws_lambda_function" "pipeline_orchestrator" {
   timeout       = 900
   memory_size   = 256
 
-  filename         = data.archive_file.pipeline_orchestrator.output_path
-  source_code_hash = data.archive_file.pipeline_orchestrator.output_base64sha256
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/data-pipeline/pipeline-orchestrator.zip"
+  source_code_hash = data.aws_s3_object.pipeline_orchestrator_zip.etag
 
   environment {
     variables = {

@@ -167,7 +167,7 @@ resource "aws_s3_bucket_policy" "cloudfront_logs" {
       {
         Sid       = "DenyHTTP"
         Effect    = "Deny"
-        Principal = "*"
+        Principal = "*" # nosonar — HTTPS 강제 Deny 정책 (보안 강화)
         Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudfront_logs.arn,
@@ -507,7 +507,7 @@ resource "aws_cloudfront_response_headers_policy" "security_headers" {
     }
 
     content_security_policy {
-      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.fiveline.store; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+      content_security_policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.fiveline.store https://data.fiveline.store; frame-src https://grafana.fiveline.store; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
       override                = true
     }
   }

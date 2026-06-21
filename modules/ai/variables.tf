@@ -1,5 +1,10 @@
 # ── 공통 ─────────────────────────────────────────────────────────────────────
 
+variable "artifacts_bucket" {
+  description = "S3 artifact 버킷 이름 — Lambda zip 저장소 (CI/CD가 업로드)"
+  type        = string
+}
+
 variable "project" {
   description = "프로젝트 이름 (리소스 명칭 prefix)"
   type        = string

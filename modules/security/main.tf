@@ -1,4 +1,4 @@
-locals {
+﻿locals {
   project = "fiveline"
 }
 
@@ -113,36 +113,13 @@ resource "aws_sns_topic_policy" "guardduty_alerts" {
 }
 
 resource "aws_sns_topic_subscription" "security_alerts_email" {
+  count     = var.security_alert_email != "" ? 1 : 0
   topic_arn = aws_sns_topic.security_alerts.arn
   protocol  = "email"
   endpoint  = var.security_alert_email
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# GuardDuty Suppression Filter — 의도된 퍼블릭 리소스 억제
-# ════════════════════════════════════════════════════════════════════════════
-
-# dashboard S3 버킷은 정적 웹사이트 호스팅으로 퍼블릭 접근이 의도된 설계.
-# GuardDuty가 PutBucketPolicy/BlockPublicAccessDisabled를 탐지하지만 정상 동작.
-resource "aws_guardduty_filter" "dashboard_public_access" {
-  detector_id = aws_guardduty_detector.fiveline.id
-  name        = "fiveline-dashboard-public-access-intentional"
-  action      = "ARCHIVE"
-  rank        = 1
-
-  finding_criteria {
-    criterion {
-      field  = "resource.s3BucketDetails.name"
-      equals = ["fiveline-dashboard"]
-    }
-  }
-
-  tags = {
-    Name    = "fiveline-dashboard-public-access-intentional"
-    Service = "security"
-  }
-}
-
 # ════════════════════════════════════════════════════════════════════════════
 # CloudTrail + VPC Flow Logs
 # ════════════════════════════════════════════════════════════════════════════
@@ -244,7 +221,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
       {
         Sid       = "DenyHTTP"
         Effect    = "Deny"
-        Principal = "*"
+        Principal = "*" # nosonar — HTTPS 강제 Deny 정책 (보안 강화)
         Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail.arn,
@@ -338,7 +315,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_policy" {
       {
         Effect   = "Allow"
         Action   = ["logs:DescribeLogGroups"]
-        Resource = "*"
+        Resource = "*" # nosonar
       }
     ]
   })

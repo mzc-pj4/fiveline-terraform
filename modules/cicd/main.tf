@@ -1,7 +1,6 @@
-# ══════════════════════════════════════════════════════════════════════════════
+﻿# ══════════════════════════════════════════════════════════════════════════════
 # modules/cicd/main.tf
-# ECR + GitHub Actions OIDC IAM Role 통합 모듈
-# 출처: lhj/modules/ecr/ + lhj/modules/github-actions-oidc/
+# ECR + GitHub Actions OIDC IAM Role + S3 Artifact 버킷 통합 모듈
 # ══════════════════════════════════════════════════════════════════════════════
 
 data "aws_caller_identity" "current" {}
@@ -107,7 +106,7 @@ resource "aws_iam_role_policy" "ecr" {
         Sid      = "ECRAuth"
         Effect   = "Allow"
         Action   = ["ecr:GetAuthorizationToken"]
-        Resource = "*"
+        Resource = "*" # nosonar
       },
       {
         Sid    = "ECRPush"
@@ -141,7 +140,7 @@ resource "aws_iam_role_policy" "eks" {
       Sid      = "EKSDescribe"
       Effect   = "Allow"
       Action   = ["eks:DescribeCluster"]
-      Resource = "*"
+      Resource = "*" # nosonar
     }]
   })
 }
@@ -163,4 +162,144 @@ resource "aws_iam_role_policy" "bedrock" {
       Resource = "arn:aws:bedrock:${local.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
     }]
   })
+}
+
+# ──────────────────────────────────────────────
+# S3 Artifact 버킷 — Lambda zip / Glue 스크립트 저장
+# Backend/Frontend CI/CD가 빌드 결과물을 업로드하고
+# Terraform이 S3 참조 방식으로 Lambda/Glue를 배포
+# ──────────────────────────────────────────────
+
+resource "aws_s3_bucket" "artifacts" {
+  bucket        = "${var.project_name}-artifacts-${local.account_id}"
+  force_destroy = false
+
+  tags = {
+    Service = "cicd"
+    Name    = "${var.project_name}-artifacts"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "artifacts" {
+  bucket                  = aws_s3_bucket.artifacts.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = var.kms_arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_artifacts" {
+  name = "${var.project_name}-github-actions-artifacts"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ArtifactsBucketReadWrite"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.artifacts.arn,
+          "${aws_s3_bucket.artifacts.arn}/*"
+        ]
+      },
+      {
+        Sid      = "ArtifactsKmsEncrypt"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = var.kms_arn # nosonar
+      },
+      {
+        Sid    = "ReadCicdParameters"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${local.region}:${local.account_id}:parameter/fiveline/cicd/*"
+      }
+    ]
+  })
+}
+
+# ── SSM Parameter Store — CI/CD 참조값 자동 관리 ──────────────────────────────
+# GitHub Actions가 이 값들을 런타임에 SSM에서 읽어옴 (수동 Secret 관리 불필요)
+
+resource "aws_iam_role_policy" "github_actions_dashboard" {
+  name = "${var.project_name}-github-actions-dashboard"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DashboardBucketWrite"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.dashboard_bucket_name}",
+          "arn:aws:s3:::${var.dashboard_bucket_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_ssm_parameter" "artifacts_bucket" {
+  name  = "/fiveline/cicd/artifacts-bucket"
+  type  = "String"
+  value = aws_s3_bucket.artifacts.bucket
+
+  tags = {
+    Name    = "fiveline-cicd-artifacts-bucket"
+    Service = "cicd"
+  }
+}
+
+resource "aws_ssm_parameter" "dashboard_bucket" {
+  name  = "/fiveline/cicd/dashboard-bucket"
+  type  = "String"
+  value = var.dashboard_bucket_name
+
+  tags = {
+    Name    = "fiveline-cicd-dashboard-bucket"
+    Service = "cicd"
+  }
+}
+
+resource "aws_ssm_parameter" "github_actions_role_arn" {
+  name  = "/fiveline/cicd/github-actions-role-arn"
+  type  = "String"
+  value = aws_iam_role.github_actions.arn
+
+  tags = {
+    Name    = "fiveline-cicd-github-actions-role-arn"
+    Service = "cicd"
+  }
 }

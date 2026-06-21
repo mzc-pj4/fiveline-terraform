@@ -31,3 +31,13 @@ variable "ecr_prefix" {
   type        = string
   default     = "fiveline-ecr"
 }
+
+variable "kms_arn" {
+  description = "KMS 키 ARN — artifact 버킷 암호화에 사용"
+  type        = string
+}
+
+variable "dashboard_bucket_name" {
+  description = "대시보드 S3 버킷명 — GitHub Actions 배포 권한 및 SSM 파라미터에 사용"
+  type        = string
+}

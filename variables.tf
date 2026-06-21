@@ -12,10 +12,16 @@ variable "alb_dns_name" {
   default     = ""
 }
 
+variable "alb_lb_name" {
+  description = "CloudWatch ALB 메트릭 차원값 (app/{name}/{id} 형식) — summary-writer Lambda가 운영 메트릭 수집에 사용"
+  type        = string
+  default     = "app/fiveline-alb/46f3ca3db6fcf6f3"
+}
+
 variable "security_alert_email" {
   description = "GuardDuty 보안 알림 수신 이메일 주소"
   type        = string
-  default     = "lljjmm1010@gmail.com"
+  default     = ""
 }
 
 variable "admin_allowed_cidrs" {

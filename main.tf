@@ -90,10 +90,10 @@ module "database" {
 module "data_pipeline" {
   source = "./modules/data-pipeline"
 
-  lambda_src_path               = "${path.root}/jihoo/lambda-src"
-  glue_scripts_path             = "${path.root}/jihoo/glue-scripts"
+  artifacts_bucket              = module.cicd.artifacts_bucket
   dashboard_builder_lambda_arn  = var.dashboard_builder_lambda_arn
   dashboard_builder_lambda_name = var.dashboard_builder_lambda_name
+  alb_lb_name                   = var.alb_lb_name
 }
 
 # ── 8. AI (jihoo — Bedrock, LangGraph, Report Embedder) ───────────────────────
@@ -103,7 +103,8 @@ module "data_pipeline" {
 module "ai" {
   source = "./modules/ai"
 
-  env = "prod"
+  env              = "prod"
+  artifacts_bucket = module.cicd.artifacts_bucket
 
   data_lake_bucket_arn         = module.data_pipeline.data_lake_bucket_arn
   data_lake_bucket_name        = module.data_pipeline.data_lake_bucket_id
@@ -124,6 +125,8 @@ module "ai" {
 
 module "observability" {
   source = "./modules/observability"
+
+  artifacts_bucket = module.cicd.artifacts_bucket
 
   # hsh 변수
   s3_bucket_name             = module.data_pipeline.data_lake_bucket_id
@@ -146,6 +149,24 @@ module "observability" {
   # 2-phase 변수 (1차="" → ai apply 후 2차에서 실제 값 주입)
   langgraph_lambda_arn           = var.langgraph_lambda_arn
   langgraph_lambda_function_name = var.langgraph_lambda_name
+
+  # CloudFront 설정 (cdn 모듈 output)
+  cloudfront_waf_arn = module.cdn.cloudfront_waf_arn
+  acm_cert_arn       = module.cdn.acm_cert_arn
+}
+
+# ── data.fiveline.store Route53 A 레코드 (observability → cdn 역방향 의존성 방지용 루트 배치) ──
+
+resource "aws_route53_record" "dashboard_data" {
+  zone_id = module.cdn.hosted_zone_id
+  name    = "data.fiveline.store"
+  type    = "A"
+
+  alias {
+    name                   = module.observability.dashboard_cloudfront_domain_name
+    zone_id                = module.observability.dashboard_cloudfront_hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 # ── 10. CI/CD (lhj — ECR + GitHub Actions OIDC) ──────────────────────────────
@@ -153,6 +174,8 @@ module "observability" {
 module "cicd" {
   source = "./modules/cicd"
 
-  github_org   = var.github_org
-  github_repos = var.github_repos
+  github_org            = var.github_org
+  github_repos          = var.github_repos
+  kms_arn               = module.kms.secrets_manager_arn
+  dashboard_bucket_name = module.observability.dashboard_bucket_name
 }
