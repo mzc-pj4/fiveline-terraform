@@ -1,0 +1,13 @@
+{
+  "summaryDate": {"S": "2026-06-02"},
+  "totalOrders": {"N": "1247"},
+  "successOrders": {"N": "1198"},
+  "failedOrders": {"N": "49"},
+  "failureRate": {"N": "0.039"},
+  "avgResponseTimeMs": {"N": "850"},
+  "p99ResponseTimeMs": {"N": "2400"},
+  "currentAlarmCount": {"N": "2"},
+  "topErrorCode": {"S": "DB_TIMEOUT"},
+  "peakHour": {"S": "15:00"},
+  "updatedAt": {"S": "2026-06-02T06:30:00Z"}
+}
