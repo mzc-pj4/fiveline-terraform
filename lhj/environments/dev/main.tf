@@ -13,7 +13,7 @@ module "network" {
 module "ecr" {
   source        = "../../modules/ecr"
   project_name  = "fiveline-ecr"
-  service_names = ["user-service", "product-service", "order-service", "frontend"]
+  service_names = ["user-service", "product-service", "order-service", "frontend", "platform"]
 }
 
 module "eks" {
@@ -36,6 +36,8 @@ module "github_actions_oidc" {
   github_org   = "mzc-pj4"
   github_repos = ["fiveline-backend", "fiveline-frontend"]
   ecr_prefix   = "fiveline-ecr"
+  # platform repo는 김지호(데이터 파이프라인) Role에서만 push 가능하도록 제외
+  ecr_repositories = ["user-service", "product-service", "order-service", "frontend", "admin-service", "tools/python"]
   # bedrock invoke policy added for AIOps
 }
 
@@ -53,6 +55,26 @@ module "rds" {
   deletion_protection = false
 }
 
+resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
+  name = "dynamodb-aiops-read-policy"
+  role = "fiveline-admin-service-sa-role"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "DynamoDBRead"
+      Effect = "Allow"
+      Action = [
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:GetItem",
+      ]
+      Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/fiveline-${var.environment}-aiops-canary-logs"
+    }]
+  })
+}
+
+data "aws_caller_identity" "current" {}
 resource "null_resource" "argocd" {
   triggers = {
     cluster_name = module.eks.cluster_name

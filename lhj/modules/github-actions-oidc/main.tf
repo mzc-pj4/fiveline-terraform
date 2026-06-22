@@ -4,6 +4,10 @@ data "aws_region" "current" {}
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
+  ecr_resources = length(var.ecr_repositories) > 0 ? [
+    for repo in var.ecr_repositories :
+    "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.ecr_prefix}/${repo}"
+  ] : ["arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.ecr_prefix}/*"]
 }
 
 # ────────────────────────────────────────────────
@@ -70,7 +74,7 @@ resource "aws_iam_role_policy" "ecr" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
         ]
-        Resource = "arn:aws:ecr:${local.region}:${local.account_id}:repository/${var.ecr_prefix}/*"
+        Resource = local.ecr_resources
       },
     ]
   })
