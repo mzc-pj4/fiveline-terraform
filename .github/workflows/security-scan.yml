@@ -1,0 +1,161 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions: {}
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Gitleaks — 시크릿 / 자격증명 누출 탐지
+  # ──────────────────────────────────────────────
+  gitleaks:
+    name: Gitleaks (시크릿 누출)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks 스캔
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # 2. tfsec — Terraform IaC 보안 취약점
+  # ──────────────────────────────────────────────
+  tfsec:
+    name: tfsec (Terraform IaC)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: tfsec PR 코멘트 (PR 시)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/tfsec-pr-commenter-action@v1.2.0
+        with:
+          github_token: ${{ github.token }}
+          soft_fail_commenter: true
+
+      - name: tfsec (push 시)
+        if: github.event_name == 'push'
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          soft_fail: true
+
+  # ──────────────────────────────────────────────
+  # 3. Bandit — Lambda Python 코드 정적 보안 분석
+  #    lambda-src 경로에 .py 파일이 추가되면 자동 활성화
+  # ──────────────────────────────────────────────
+  bandit:
+    name: Bandit (Python 보안)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 파일 존재 확인
+        id: check-python
+        run: |
+          COUNT=$(find . -path "*/lambda*/*.py" -not -path "./.git/*" | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Lambda Python 파일 수: $COUNT"
+
+      - name: Setup Python
+        if: steps.check-python.outputs.count != '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bandit 스캔
+        if: steps.check-python.outputs.count != '0'
+        run: |
+          pip install bandit -q
+          find . -path "*/lambda*/*.py" -not -path "./.git/*" \
+            | xargs bandit -f json -o bandit-report.json \
+              --severity-level medium \
+              --confidence-level medium || true
+
+      - name: Bandit 결과 PR 코멘트
+        if: steps.check-python.outputs.count != '0' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('bandit-report.json')) return;
+
+            const report = JSON.parse(fs.readFileSync('bandit-report.json', 'utf8'));
+            const results = report.results ?? [];
+            const high   = results.filter(r => r.issue_severity === 'HIGH');
+            const medium = results.filter(r => r.issue_severity === 'MEDIUM');
+
+            let body;
+            if (results.length === 0) {
+              body = '## 🐍 Bandit Python 보안 스캔\n✅ 발견된 취약점 없음';
+            } else {
+              const rows = results.slice(0, 20).map(r =>
+                `| **${r.issue_severity}** | ${r.issue_text} | \`${r.filename.replace('./', '')}:${r.line_number}\` |`
+              ).join('\n');
+              body = [
+                '## 🐍 Bandit Python 보안 스캔',
+                `> HIGH: **${high.length}**개 · MEDIUM: **${medium.length}**개`,
+                '',
+                '| 심각도 | 내용 | 위치 |',
+                '|---|---|---|',
+                rows,
+                results.length > 20 ? `\n_... 외 ${results.length - 20}건 (전체 결과는 Actions 로그 참고)_` : '',
+              ].join('\n');
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  # ──────────────────────────────────────────────
+  # 4. Trivy — Lambda 의존성 (requirements.txt) 취약점
+  #    requirements.txt 파일이 추가되면 자동 활성화
+  # ──────────────────────────────────────────────
+  trivy-deps:
+    name: Trivy (Lambda 의존성)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: requirements.txt 존재 확인
+        id: check-req
+        run: |
+          COUNT=$(find . -name "requirements*.txt" -not -path "./.git/*" | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "requirements 파일 수: $COUNT"
+
+      - name: Trivy 의존성 스캔
+        if: steps.check-req.outputs.count != '0'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+          vuln-type: library
