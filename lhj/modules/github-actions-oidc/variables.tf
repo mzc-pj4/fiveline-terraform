@@ -20,3 +20,9 @@ variable "ecr_prefix" {
   type        = string
   description = "ECR repository prefix (e.g. fiveline-ecr)"
 }
+
+variable "ecr_repositories" {
+  type        = list(string)
+  description = "Explicit ECR repository names to allow push. Defaults to all repos under ecr_prefix."
+  default     = []
+}

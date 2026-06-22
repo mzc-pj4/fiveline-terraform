@@ -4,6 +4,10 @@ data "aws_region" "current" {}
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
+  ecr_resources = length(var.ecr_repositories) > 0 ? [
+    for repo in var.ecr_repositories :
+    "arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.ecr_prefix}/${repo}"
+  ] : ["arn:aws:ecr:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:repository/${var.ecr_prefix}/*"]
 }
 
 # ────────────────────────────────────────────────
@@ -70,7 +74,7 @@ resource "aws_iam_role_policy" "ecr" {
           "ecr:UploadLayerPart",
           "ecr:CompleteLayerUpload",
         ]
-        Resource = "arn:aws:ecr:${local.region}:${local.account_id}:repository/${var.ecr_prefix}/*"
+        Resource = local.ecr_resources
       },
     ]
   })
@@ -108,6 +112,59 @@ resource "aws_iam_role_policy" "bedrock" {
       Effect = "Allow"
       Action = ["bedrock:InvokeModel"]
       Resource = "arn:aws:bedrock:${local.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+    }]
+  })
+}
+
+# ────────────────────────────────────────────────
+# Policy — CloudWatch + ELBv2 (Post-Canary 메트릭)
+# ────────────────────────────────────────────────
+resource "aws_iam_role_policy" "cloudwatch_read" {
+  name = "cloudwatch-read-policy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CloudWatchRead"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:ListMetrics",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ELBDescribe"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+# ────────────────────────────────────────────────
+# Policy — DynamoDB (AIOps 결과 저장)
+# ────────────────────────────────────────────────
+resource "aws_iam_role_policy" "dynamodb_aiops_write" {
+  name = "dynamodb-aiops-write-policy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "DynamoDBPutItem"
+      Effect = "Allow"
+      Action = [
+        "dynamodb:PutItem",
+      ]
+      Resource = "arn:aws:dynamodb:${local.region}:${local.account_id}:table/${var.project_name}-${var.environment}-aiops-canary-logs"
     }]
   })
 }

@@ -1,6 +1,6 @@
 variable "project_name" {
   type    = string
-  default = "team4-aiops"
+  default = "fiveline"
 }
 
 variable "environment" {
