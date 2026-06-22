@@ -75,17 +75,18 @@ resource "aws_iam_role_policy" "admin_service_sa_dynamodb" {
 }
 
 data "aws_caller_identity" "current" {}
-resource "null_resource" "argocd" {
-  triggers = {
-    cluster_name = module.eks.cluster_name
-  }
 
-  provisioner "local-exec" {
-    command = <<-EOT
-      aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.aws_region}
-      kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-      kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    EOT
+resource "helm_release" "argocd" {
+  name             = "argocd"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argo-cd"
+  version          = "7.3.11"
+  namespace        = "argocd"
+  create_namespace = true
+
+  set {
+    name  = "server.service.type"
+    value = "ClusterIP"
   }
 
   depends_on = [module.eks]
