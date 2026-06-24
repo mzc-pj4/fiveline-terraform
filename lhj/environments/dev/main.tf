@@ -91,3 +91,93 @@ resource "helm_release" "argocd" {
 
   depends_on = [module.eks]
 }
+
+resource "helm_release" "argocd_notifications" {
+  name             = "argocd-notifications"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argocd-notifications"
+  version          = "1.8.1"
+  namespace        = "argocd"
+  create_namespace = false
+
+  depends_on = [helm_release.argocd]
+}
+
+# IAM Role for ArgoCD Image Updater (ECR read access via IRSA)
+resource "aws_iam_role" "argocd_image_updater" {
+  name = "fiveline-${var.environment}-argocd-image-updater"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = module.eks.oidc_provider_arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${module.eks.oidc_provider_url}:sub" = "system:serviceaccount:argocd:argocd-image-updater"
+          "${module.eks.oidc_provider_url}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "argocd_image_updater_ecr" {
+  name = "ecr-read-policy"
+  role = aws_iam_role.argocd_image_updater.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:DescribeImages",
+        "ecr:ListImages",
+        "ecr:BatchGetImage",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "helm_release" "argocd_image_updater" {
+  name             = "argocd-image-updater"
+  repository       = "https://argoproj.github.io/argo-helm"
+  chart            = "argocd-image-updater"
+  version          = "0.11.0"
+  namespace        = "argocd"
+  create_namespace = false
+
+  set {
+    name  = "config.registries[0].name"
+    value = "ECR"
+  }
+  set {
+    name  = "config.registries[0].prefix"
+    value = "089955620282.dkr.ecr.ap-northeast-2.amazonaws.com"
+  }
+  set {
+    name  = "config.registries[0].api_url"
+    value = "https://089955620282.dkr.ecr.ap-northeast-2.amazonaws.com"
+  }
+  set {
+    name  = "config.registries[0].credentials"
+    value = "ext:/scripts/auth1.sh"
+  }
+  set {
+    name  = "config.registries[0].credsexpire"
+    value = "10h"
+  }
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.argocd_image_updater.arn
+  }
+
+  depends_on = [helm_release.argocd, aws_iam_role_policy.argocd_image_updater_ecr]
+}
