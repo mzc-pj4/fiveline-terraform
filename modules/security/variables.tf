@@ -24,3 +24,13 @@ variable "security_alert_email" {
   description = "보안 알림 수신 이메일"
   type        = string
 }
+
+variable "guardduty_blocked_ip_set_arn" {
+  description = "GuardDuty 자동 차단 WAF IP Set ARN (Lambda WAF 업데이트 권한용)"
+  type        = string
+}
+
+variable "guardduty_blocked_ip_set_id" {
+  description = "GuardDuty 자동 차단 WAF IP Set ID (Lambda 환경변수 주입용)"
+  type        = string
+}

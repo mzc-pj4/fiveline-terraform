@@ -120,6 +120,166 @@ resource "aws_sns_topic_subscription" "security_alerts_email" {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
+# GuardDuty Auto-remediation: Lambda → WAF IP Set 자동 차단
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_iam_role" "guardduty_auto_block" {
+  name = "${local.project}-guardduty-auto-block"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block-role"
+  }
+}
+
+resource "aws_iam_role_policy" "guardduty_auto_block" {
+  name = "${local.project}-guardduty-auto-block-policy"
+  role = aws_iam_role.guardduty_auto_block.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["wafv2:GetIPSet", "wafv2:UpdateIPSet"]
+        Resource = var.guardduty_blocked_ip_set_arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.security_alerts.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+data "archive_file" "guardduty_auto_block" {
+  type        = "zip"
+  output_path = "${path.module}/guardduty_auto_block.zip"
+
+  source {
+    content  = <<-EOT
+      import boto3, json, os
+
+      def lambda_handler(event, context):
+          detail = event.get('detail', {})
+          action = detail.get('service', {}).get('action', {})
+
+          remote_ip = None
+          if 'networkConnectionAction' in action:
+              remote_ip = action['networkConnectionAction']['remoteIpDetails']['ipAddressV4']
+          elif 'awsApiCallAction' in action:
+              remote_ip = action['awsApiCallAction'].get('remoteIpDetails', {}).get('ipAddressV4')
+          elif 'portProbeAction' in action:
+              probes = action['portProbeAction'].get('portProbeDetails', [])
+              if probes:
+                  remote_ip = probes[0]['remoteIpDetails']['ipAddressV4']
+
+          if not remote_ip:
+              print(f"No IP in finding: {detail.get('type', 'unknown')}")
+              return {'statusCode': 200, 'body': 'No IP to block'}
+
+          ip_cidr = f"{remote_ip}/32"
+          waf = boto3.client('wafv2', region_name='us-east-1')
+
+          resp = waf.get_ip_set(
+              Name=os.environ['WAF_IP_SET_NAME'],
+              Scope='CLOUDFRONT',
+              Id=os.environ['WAF_IP_SET_ID']
+          )
+          addresses = resp['IPSet']['Addresses']
+
+          if ip_cidr not in addresses:
+              waf.update_ip_set(
+                  Name=os.environ['WAF_IP_SET_NAME'],
+                  Scope='CLOUDFRONT',
+                  Id=os.environ['WAF_IP_SET_ID'],
+                  Addresses=addresses + [ip_cidr],
+                  LockToken=resp['LockToken']
+              )
+              boto3.client('sns').publish(
+                  TopicArn=os.environ['SNS_TOPIC_ARN'],
+                  Subject='[Fiveline] GuardDuty 자동 차단 완료',
+                  Message=f"악성 IP {ip_cidr} WAF IP Set 자동 추가 완료\n유형: {detail.get('type','unknown')}\n심각도: {detail.get('severity','unknown')}"
+              )
+              print(f"Blocked: {ip_cidr}")
+          else:
+              print(f"Already blocked: {ip_cidr}")
+
+          return {'statusCode': 200, 'body': ip_cidr}
+    EOT
+    filename = "lambda_function.py"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "guardduty_auto_block" {
+  name              = "/aws/lambda/${local.project}-guardduty-auto-block"
+  retention_in_days = 30
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block-logs"
+  }
+}
+
+resource "aws_lambda_function" "guardduty_auto_block" {
+  filename         = data.archive_file.guardduty_auto_block.output_path
+  function_name    = "${local.project}-guardduty-auto-block"
+  role             = aws_iam_role.guardduty_auto_block.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
+  source_code_hash = data.archive_file.guardduty_auto_block.output_base64sha256
+  timeout          = 30
+
+  environment {
+    variables = {
+      WAF_IP_SET_ID   = var.guardduty_blocked_ip_set_id
+      WAF_IP_SET_NAME = "${local.project}-guardduty-blocked-ips"
+      SNS_TOPIC_ARN   = aws_sns_topic.security_alerts.arn
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.guardduty_auto_block]
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block"
+  }
+}
+
+resource "aws_lambda_permission" "guardduty_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.guardduty_auto_block.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.guardduty_findings.arn
+}
+
+resource "aws_cloudwatch_event_target" "guardduty_to_lambda" {
+  rule      = aws_cloudwatch_event_rule.guardduty_findings.name
+  target_id = "GuardDutyToLambda"
+  arn       = aws_lambda_function.guardduty_auto_block.arn
+}
+
+# ════════════════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════════════════
 # CloudTrail + VPC Flow Logs
 # ════════════════════════════════════════════════════════════════════════════

@@ -303,6 +303,24 @@ resource "aws_wafv2_ip_set" "admin_allowlist" {
   }
 }
 
+# ════════════════════════════════════════════════════════════════════════════
+# GuardDuty 자동 차단 IP Set (CLOUDFRONT scope — us-east-1)
+# Lambda가 악성 IP를 이 IP Set에 추가 → CloudFront WAF에서 즉시 차단
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_wafv2_ip_set" "guardduty_blocked_ips" {
+  provider           = aws.us_east_1
+  name               = "${local.project}-guardduty-blocked-ips"
+  scope              = "CLOUDFRONT"
+  ip_address_version = "IPV4"
+  addresses          = []
+
+  tags = {
+    Service = "waf"
+    Name    = "${local.project}-guardduty-blocked-ips"
+  }
+}
+
 resource "aws_wafv2_web_acl" "cloudfront" {
   provider    = aws.us_east_1
   name        = "${local.project}-cloudfront-waf"
@@ -485,11 +503,32 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
+  rule {
+    name     = "guardduty-blocked-ips"
+    priority = 7
+
+    action {
+      block {}
+    }
+
+    statement {
+      ip_set_reference_statement {
+        arn = aws_wafv2_ip_set.guardduty_blocked_ips.arn
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "guardduty-blocked-ips"
+      sampled_requests_enabled   = true
+    }
+  }
+
   dynamic "rule" {
     for_each = length(var.admin_allowed_cidrs) > 0 ? [1] : []
     content {
       name     = "admin-ip-allowlist"
-      priority = 7
+      priority = 8
 
       statement {
         and_statement {

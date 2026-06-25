@@ -224,6 +224,10 @@ resource "aws_eks_node_group" "ondemand" {
     "k8s.io/cluster-autoscaler/${aws_eks_cluster.fiveline_eks.name}"       = "owned"
   }
 
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
