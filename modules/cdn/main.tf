@@ -319,6 +319,10 @@ resource "aws_wafv2_ip_set" "guardduty_blocked_ips" {
     Service = "waf"
     Name    = "${local.project}-guardduty-blocked-ips"
   }
+
+  lifecycle {
+    ignore_changes = [addresses]
+  }
 }
 
 resource "aws_wafv2_web_acl" "cloudfront" {
@@ -566,6 +570,32 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         metric_name                = "admin-ip-allowlist"
         sampled_requests_enabled   = true
       }
+    }
+  }
+
+  rule {
+    name     = "global-rate-limit"
+    priority = 9
+
+    action {
+      block {
+        custom_response {
+          response_code = 429
+        }
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "global-rate-limit"
+      sampled_requests_enabled   = true
     }
   }
 

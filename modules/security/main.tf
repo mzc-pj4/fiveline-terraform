@@ -265,16 +265,34 @@ resource "aws_lambda_function" "guardduty_auto_block" {
   }
 }
 
+resource "aws_cloudwatch_event_rule" "guardduty_high_findings" {
+  name        = "${local.project}-guardduty-high-findings"
+  description = "GuardDuty HIGH 심각도 Finding → Lambda 자동 차단"
+
+  event_pattern = jsonencode({
+    source      = ["aws.guardduty"]
+    detail-type = ["GuardDuty Finding"]
+    detail = {
+      severity = [{ numeric = [">=", 7] }]
+    }
+  })
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-high-rule"
+  }
+}
+
 resource "aws_lambda_permission" "guardduty_eventbridge" {
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.guardduty_auto_block.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.guardduty_findings.arn
+  source_arn    = aws_cloudwatch_event_rule.guardduty_high_findings.arn
 }
 
 resource "aws_cloudwatch_event_target" "guardduty_to_lambda" {
-  rule      = aws_cloudwatch_event_rule.guardduty_findings.name
+  rule      = aws_cloudwatch_event_rule.guardduty_high_findings.name
   target_id = "GuardDutyToLambda"
   arn       = aws_lambda_function.guardduty_auto_block.arn
 }
