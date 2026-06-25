@@ -143,9 +143,31 @@ kubectl 명령 가능 (누구든)          Workstation EC2 (private subnet)
 ```
 
 **발표 멘트**:
+
+*[Before 화면 보여주며]*
+> "2024년 한 해 동안 크리덴셜 스터핑으로 인한 피해액이 전 세계 60억 달러입니다.
+> 저희 이커머스 서비스도 동일한 위협에 노출되어 있습니다.
+> 다크웹에서 유출된 10만 개 DB를 이 스크립트처럼 자동으로 대입하면,
+> WAF가 없을 때 실제 계정이 이렇게 탈취됩니다."
+
+*[After 화면 보여주며]*
+> "이를 막기 위해 AWS WAF + 애플리케이션 레이어 + 계정 잠금, 3중 방어 아키텍처를 설계했습니다.
+> WAF 단독으로는 IP 변경 공격에 취약합니다.
+> 그래서 Defense-in-Depth 구조로 각 레이어가 서로 보완하도록 설계했습니다.
+> 이는 AWS Well-Architected Framework 보안 원칙과도 일치합니다."
+
+*[전체 멘트]*
 > "관리형 룰셋은 AWS가 관리하는 알려진 공격을 막습니다.
 > 이커머스를 겨냥한 공격은 **우리 비즈니스 로직을 이해한 커스텀 룰**이 필요합니다.
 > 로그인 엔드포인트에 Rate Limit을 걸면 크리덴셜 스터핑을 원천 차단할 수 있습니다."
+
+**Before/After 데모 구성**:
+
+| | Before | After |
+|--|--------|-------|
+| 화면 | `[SUCCESS] a123@gmail.com JWT: eyJ...` | `[BLOCKED 429] a123@gmail.com` |
+| 상태 | WAF COUNT 모드 (차단 없음) | WAF + App Rate Limit + Account Lockout |
+| 결과 | 3 accounts compromised | 0 accounts compromised |
 
 **비주얼**: 상/중/하 3단 구성 + 공격 시나리오 화살표
 

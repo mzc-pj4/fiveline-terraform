@@ -48,13 +48,27 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontOAC"
+        Sid    = "AllowCloudFrontOACGetObject"
         Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.frontend.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
+          }
+        }
+      },
+      {
+        Sid    = "AllowCloudFrontOACListBucket"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.frontend.arn
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
@@ -297,6 +311,46 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   default_action {
     allow {}
+  }
+
+  rule {
+    name     = "ecommerce-login-ratelimit"
+    priority = 0
+
+    action {
+      block {
+        custom_response {
+          response_code = 429
+        }
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string         = "/api/auth/login"
+            positional_constraint = "STARTS_WITH"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ecommerce-login-ratelimit"
+      sampled_requests_enabled   = true
+    }
   }
 
   rule {
@@ -678,13 +732,6 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
     error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
@@ -758,13 +805,6 @@ resource "aws_cloudfront_distribution" "admin" {
     cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
-  }
-
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
   }
 
   custom_error_response {

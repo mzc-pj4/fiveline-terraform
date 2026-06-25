@@ -85,6 +85,7 @@ resource "aws_eks_cluster" "fiveline_eks" {
 
     endpoint_private_access = true
     endpoint_public_access  = false
+    # prod에서도 동일 — 외부 접근은 SSM → Workstation 경유
   }
 
   access_config {

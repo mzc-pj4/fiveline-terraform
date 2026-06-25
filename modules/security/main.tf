@@ -357,7 +357,7 @@ resource "aws_wafv2_rule_group" "ecommerce_ratelimit" {
 
         scope_down_statement {
           byte_match_statement {
-            search_string         = "/api/users/login"
+            search_string         = "/api/auth/login"
             positional_constraint = "STARTS_WITH"
             field_to_match {
               uri_path {}
