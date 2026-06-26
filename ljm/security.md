@@ -35,25 +35,14 @@ AWS 관리형 룰셋은 SQLi, XSS 등 패턴 기반 공격을 탐지한다.
 
 Regional WAF는 ALB 앞에 위치하므로 CloudFront Edge IP만 보고, 실제 공격자 IP를 식별할 수 없다. 실제 클라이언트 IP가 보이는 CloudFront WAF에 Rate Limit을 배치해야 한다.
 
-**CloudFront WAF — 로그인 엔드포인트 보호**
+**CloudFront WAF — 모든 이커머스 Rate Limit 통합 배치 (modules/cdn/main.tf)**
 
-```hcl
-# modules/cdn/main.tf (priority 0)
-rate_based_statement {
-  limit              = 100        # IP당 5분 100회 초과 → BLOCK 429
-  aggregate_key_type = "IP"
-  scope_down_statement {
-    uri_path = "/api/auth/login"  # 크리덴셜 스터핑 대상 엔드포인트 한정
-  }
-}
-```
-
-**Regional WAF — 이커머스 엔드포인트별 분리 (modules/security/main.tf)**
+Regional WAF는 ALB 앞에서 CloudFront Edge IP만 본다. `aggregate_key_type = "IP"` 기준 집계가 개별 공격자 IP가 아닌 Edge IP 기준으로 동작하므로, 실제 클라이언트 IP가 보이는 CloudFront WAF에 모든 rate limit을 배치한다.
 
 ```
-/api/auth/login         → 100 req / 5min   (크리덴셜 스터핑)
-/api/orders/from-cart   → 100 req / 5min   (카드 BIN 어택)
-/api/products           → 500 req / 5min   (가격 스크래핑 — 정상 조회가 많아 임계값 완화)
+/api/auth/login  → 100 req / 5min  (priority 0 — 크리덴셜 스터핑)
+/api/orders      → 100 req / 5min  (priority 1 — 카드 BIN 어택)
+/api/products    → 500 req / 5min  (priority 2 — 가격 스크래핑, 정상 조회가 많아 임계값 완화)
 ```
 
 임계값 근거: 정상 사용자는 5분 내 로그인 100회, 결제 100회를 시도하지 않는다. 봇은 초당 수백 건 시도한다.

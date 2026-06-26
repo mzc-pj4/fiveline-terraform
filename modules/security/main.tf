@@ -516,134 +516,6 @@ resource "aws_flow_log" "fiveline_vpc" {
 # CloudFront WAF는 cdn 모듈에서 관리 (cloudfront distribution과 동일 모듈)
 # ════════════════════════════════════════════════════════════════════════════
 
-# ── 이커머스 특화 Custom Rule Group (REGIONAL) ────────────────────────────
-
-resource "aws_wafv2_rule_group" "ecommerce_ratelimit" {
-  name        = "${local.project}-ecommerce-ratelimit"
-  scope       = "REGIONAL"
-  capacity    = 100
-  description = "E-commerce Rate Limit rules - blocks credential stuffing and card BIN attacks"
-
-  rule {
-    name     = "login-rate-limit"
-    priority = 1
-
-    statement {
-      rate_based_statement {
-        limit              = 100
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/auth/login"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "login-rate-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "checkout-rate-limit"
-    priority = 2
-
-    statement {
-      rate_based_statement {
-        limit              = 100
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/orders"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "checkout-rate-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "product-scraping-limit"
-    priority = 3
-
-    statement {
-      rate_based_statement {
-        limit              = 500
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/products"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "product-scraping-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${local.project}-ecommerce-ratelimit"
-    sampled_requests_enabled   = true
-  }
-
-  tags = {
-    Name    = "${local.project}-ecommerce-ratelimit"
-    Service = "waf"
-  }
-}
-
 # ── Regional WAF (ap-northeast-2) ────────────────────────────────────────
 
 resource "aws_wafv2_web_acl" "regional" {
@@ -691,29 +563,8 @@ resource "aws_wafv2_web_acl" "regional" {
   }
 
   rule {
-    name     = "ecommerce-ratelimit"
-    priority = 1
-
-    statement {
-      rule_group_reference_statement {
-        arn = aws_wafv2_rule_group.ecommerce_ratelimit.arn
-      }
-    }
-
-    override_action {
-      none {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "ecommerce-ratelimit-group"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
     name     = "AWSManagedRulesAmazonIpReputationList"
-    priority = 2
+    priority = 1
 
     override_action {
       none {}
@@ -735,7 +586,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
-    priority = 3
+    priority = 2
 
     override_action {
       none {}
@@ -757,7 +608,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
-    priority = 4
+    priority = 3
 
     override_action {
       none {}
@@ -779,7 +630,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesAnonymousIpList"
-    priority = 5
+    priority = 4
 
     override_action {
       none {}
@@ -800,8 +651,8 @@ resource "aws_wafv2_web_acl" "regional" {
   }
 
   rule {
-    name     = "AWSManagedRulesLinuxRuleSet"
-    priority = 6
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 5
 
     override_action {
       none {}
@@ -809,14 +660,14 @@ resource "aws_wafv2_web_acl" "regional" {
 
     statement {
       managed_rule_group_statement {
-        name        = "AWSManagedRulesLinuxRuleSet"
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "RegionalAWSManagedRulesLinuxRuleSet"
+      metric_name                = "RegionalAWSManagedRulesKnownBadInputsRuleSet"
       sampled_requests_enabled   = true
     }
   }

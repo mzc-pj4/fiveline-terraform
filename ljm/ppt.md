@@ -130,8 +130,8 @@ kubectl 명령 가능 (누구든)          Workstation EC2 (private subnet)
 공격               엔드포인트              Rate Limit
 ──────────────────────────────────────────────────────
 크리덴셜 스터핑   /api/auth/login         IP당 5분 100회 초과 → 자동 차단
-카드 BIN 어택     /api/orders/from-cart   IP당 5분 20회 초과 → 자동 차단
-가격 스크래핑     /api/products           IP당 1분 200회 초과 → 자동 차단
+카드 BIN 어택     /api/orders             IP당 5분 100회 초과 → 자동 차단
+가격 스크래핑     /api/products           IP당 5분 500회 초과 → 자동 차단
 ```
 
 **하단 — 구현 포인트**:
