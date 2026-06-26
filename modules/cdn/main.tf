@@ -416,48 +416,8 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   }
 
   rule {
-    name     = "ecommerce-products-ratelimit"
-    priority = 2
-
-    action {
-      block {
-        custom_response {
-          response_code = 429
-        }
-      }
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = 500
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/products"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "ecommerce-products-ratelimit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
     name     = "AWSManagedRulesAmazonIpReputationList"
-    priority = 3
+    priority = 2
 
     override_action {
       none {}
@@ -479,7 +439,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
-    priority = 4
+    priority = 3
 
     override_action {
       none {}
@@ -501,7 +461,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
-    priority = 5
+    priority = 4
 
     override_action {
       none {}
@@ -523,7 +483,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 6
+    priority = 5
 
     override_action {
       none {}
@@ -545,7 +505,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesAnonymousIpList"
-    priority = 7
+    priority = 6
 
     override_action {
       none {}
@@ -567,7 +527,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesLinuxRuleSet"
-    priority = 8
+    priority = 7
 
     override_action {
       none {}
@@ -589,7 +549,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "guardduty-blocked-ips"
-    priority = 9
+    priority = 8
 
     action {
       block {}
@@ -612,7 +572,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     for_each = length(var.admin_allowed_cidrs) > 0 ? [1] : []
     content {
       name     = "admin-ip-allowlist"
-      priority = 10
+      priority = 9
 
       statement {
         and_statement {
@@ -655,7 +615,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "global-rate-limit"
-    priority = 11
+    priority = 10
 
     action {
       block {

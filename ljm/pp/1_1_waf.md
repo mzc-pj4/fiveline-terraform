@@ -19,7 +19,6 @@ AWS 관리형 룰셋은 **공격 패턴**(SQL 구문, 악성 스크립트, 알�
 |----|----------|----------|------|
 | ecommerce-login-ratelimit | CloudFront WAF | 0 | ✅ 배포 완료 |
 | ecommerce-orders-ratelimit | CloudFront WAF | 1 | ✅ 배포 완료 |
-| ecommerce-products-ratelimit | CloudFront WAF | 2 | ✅ 배포 완료 |
 
 ---
 
@@ -36,12 +35,6 @@ AWS 관리형 룰셋은 **공격 패턴**(SQL 구문, 악성 스크립트, 알�
 훔친 카드번호의 유효성을 `/api/orders` 결제 엔드포인트에서 대량으로 검증한다.
 탐지 불가 이유: 형식이 정상적인 주문 API 요청.
 피해: 카드 유효성 확인 후 불법 결제, 결제사 제재로 매출 손실.
-
-**③ 가격 스크래핑 (Price Scraping)**
-
-경쟁사 봇이 `/api/products` 전 상품을 주기적으로 수집한다.
-탐지 불가 이유: 정상적인 상품 조회 요청.
-피해: 실시간 가격 추적으로 경쟁 우위 상실, 불필요한 서버 부하.
 
 ---
 
@@ -67,7 +60,6 @@ Regional WAF는 ALB 앞에 위치해 CloudFront Edge IP만 본다. `aggregate_ke
 |-----------|--------|---------|
 | `/api/auth/login` | 100 req/5min | 정상 사용자는 5분에 100번 로그인하지 않는다 |
 | `/api/orders` | 100 req/5min | 결제는 소량 반복이 공격 패턴, 정상 사용자는 저빈도 |
-| `/api/products` | 500 req/5min | 상품 조회는 정상 트래픽 자체가 많아 낮은 임계값이면 정상 사용자 차단 위험 |
 
 ---
 

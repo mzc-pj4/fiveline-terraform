@@ -27,7 +27,6 @@ AWS 관리형 룰셋은 SQLi, XSS 등 패턴 기반 공격을 탐지한다.
 |------|------|------|
 | 크리덴셜 스터핑 | 유출된 ID/PW를 `/api/auth/login`에 대량 대입 | 계정 탈취 → 포인트/결제수단 도용 |
 | 카드 BIN 어택 | 훔친 카드번호를 `/api/orders/from-cart`에 대량 검증 | 결제사 제재, 매출 손실 |
-| 가격 스크래핑 | `/api/products` 전 상품 자동 수집 | 경쟁사 실시간 가격 추적, 서버 부하 |
 
 ### 구현
 
@@ -42,7 +41,6 @@ Regional WAF는 ALB 앞에서 CloudFront Edge IP만 본다. `aggregate_key_type 
 ```
 /api/auth/login  → 100 req / 5min  (priority 0 — 크리덴셜 스터핑)
 /api/orders      → 100 req / 5min  (priority 1 — 카드 BIN 어택)
-/api/products    → 500 req / 5min  (priority 2 — 가격 스크래핑, 정상 조회가 많아 임계값 완화)
 ```
 
 임계값 근거: 정상 사용자는 5분 내 로그인 100회, 결제 100회를 시도하지 않는다. 봇은 초당 수백 건 시도한다.
