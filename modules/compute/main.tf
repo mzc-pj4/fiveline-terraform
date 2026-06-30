@@ -85,6 +85,7 @@ resource "aws_eks_cluster" "fiveline_eks" {
 
     endpoint_private_access = true
     endpoint_public_access  = false
+    # prod에서도 동일 — 외부 접근은 SSM → Workstation 경유
   }
 
   access_config {
@@ -221,6 +222,10 @@ resource "aws_eks_node_group" "ondemand" {
     Name                                                                   = "${local.project}-ondemand-ng"
     "k8s.io/cluster-autoscaler/enabled"                                    = "true"
     "k8s.io/cluster-autoscaler/${aws_eks_cluster.fiveline_eks.name}"       = "owned"
+  }
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
   }
 
   depends_on = [

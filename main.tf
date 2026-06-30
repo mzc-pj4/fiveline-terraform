@@ -49,11 +49,13 @@ module "cdn" {
 module "security" {
   source = "./modules/security"
 
-  vpc_id                   = module.networking.vpc_id
-  kms_secrets_arn          = module.kms.secrets_manager_arn
-  s3_frontend_arn          = module.cdn.s3_frontend_arn
-  cloudfront_origin_secret = module.cdn.cloudfront_origin_secret
-  security_alert_email     = var.security_alert_email
+  vpc_id                       = module.networking.vpc_id
+  kms_secrets_arn              = module.kms.secrets_manager_arn
+  s3_frontend_arn              = module.cdn.s3_frontend_arn
+  cloudfront_origin_secret     = module.cdn.cloudfront_origin_secret
+  security_alert_email         = var.security_alert_email
+  guardduty_blocked_ip_set_arn = module.cdn.guardduty_blocked_ip_set_arn
+  guardduty_blocked_ip_set_id  = module.cdn.guardduty_blocked_ip_set_id
 }
 
 # ── 5. Compute (EKS + IAM + Workstation) ──────────────────────────────────────

@@ -1,0 +1,179 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Proactive Defense" id="proactive">
+    <mxGraphModel dx="1422" dy="762" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- BEFORE PANEL: 2-1 SOAR 완성, but 첫 요청 통과 한계 -->
+        <mxCell id="b-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7e6;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="680" height="840" as="geometry" />
+        </mxCell>
+        <mxCell id="b-ttl" value="BEFORE" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="30" y="40" width="680" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="b-sttl" value="SOAR 자동화 완성 — 그러나 첫 번째 요청은 통과" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#aaaaaa;" vertex="1" parent="1">
+          <mxGeometry x="30" y="76" width="680" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- 공격자 -->
+        <mxCell id="b-atk-lb" value="🧑‍💻  공격자 (신규 악성 IP)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=14;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="100" y="112" width="280" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="b-atk" value="첫 번째 요청" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontColor=#b85450;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="100" y="140" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- 첫 요청 통과 경로 (빨간색) -->
+        <mxCell id="b-arr-pass" value="WAF IP Set에 없는 신규 IP → 통과" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2.5;fontColor=#b85450;fontSize=11;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-atk" target="b-waf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-waf" value="CloudFront WAF&lt;br&gt;(guardduty-blocked-ips만 차단)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=11;fontColor=#6c4a00;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="70" y="240" width="260" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="b-arr-waf-cf" value="신규 IP 차단 불가 → 통과" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-waf" target="b-cf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-cf" value="CloudFront" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="160" y="354" width="60" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b-arr-cf-alb" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-cf" target="b-alb" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-alb" value="ALB" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="160" y="474" width="60" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b-arr-alb-eks" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-alb" target="b-eks" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-eks" value="EKS" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="160" y="594" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- SOAR 존재 표시 (오른쪽 패널) -->
+        <mxCell id="b-soar-box" value="✅ 2-1 SOAR 자동화 완성&lt;br&gt;GuardDuty → Lambda → WAF IP Set&lt;br&gt;&lt;br&gt;BUT: GuardDuty는 패턴 누적 후 탐지&lt;br&gt;→ 첫 요청은 탐지 전이라 통과" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=11;fontColor=#6c4a00;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="400" y="310" width="280" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- 결과 -->
+        <mxCell id="b-result" value="❌  신규 악성 IP의 첫 요청은 서버까지 도달" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b85450;strokeColor=#6c0000;fontSize=14;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="730" width="580" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- CENTER ARROW -->
+        <mxCell id="ctr-arr" value="보완" style="strokeColor=#2d7600;strokeWidth=3;fontColor=#2d7600;fontSize=14;fontStyle=1;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="718" y="450" as="sourcePoint" />
+            <mxPoint x="882" y="450" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- AFTER PANEL: Proactive 3중 방어 완성 -->
+        <mxCell id="a-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fff4;strokeColor=#2d7600;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="890" y="30" width="680" height="870" as="geometry" />
+        </mxCell>
+        <mxCell id="a-ttl" value="AFTER" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#2d7600;" vertex="1" parent="1">
+          <mxGeometry x="890" y="40" width="680" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="a-sttl" value="IP Reputation + Rate-based Rule 추가 → 3중 방어 완성" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#aaaaaa;" vertex="1" parent="1">
+          <mxGeometry x="890" y="76" width="680" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- 공격자 A: 알려진 악성 IP -->
+        <mxCell id="a-atk-a-lb" value="🧑‍💻  공격자 A (알려진 악성 IP)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="895" y="112" width="270" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="a-atk-a" value="봇넷 / Tor / C&amp;C 서버" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontColor=#b85450;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="895" y="140" width="200" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- 공격자 B: 고속 반복 -->
+        <mxCell id="a-atk-b-lb" value="🧑‍💻  공격자 B (고속 반복)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="112" width="260" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="a-atk-b" value="2000+ req / 5min" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontColor=#b85450;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="140" width="200" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- CloudFront WAF (중앙) -->
+        <mxCell id="a-arr-atk-a" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-atk-a" target="a-waf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr-atk-b" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-atk-b" target="a-waf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-waf" value="CloudFront WAF" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fontStyle=1;fontColor=#2d7600;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="248" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- IP Reputation Rule (왼쪽) -->
+        <mxCell id="a-arr-waf-rep" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-rep" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-rep" value="① IP Reputation List&lt;br&gt;알려진 악성 IP → 첫 요청부터 BLOCK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#2d7600;fontSize=11;fontColor=#2d7600;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="348" width="220" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- guardduty-blocked-ips (중앙) -->
+        <mxCell id="a-arr-waf-gd" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-gdset" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-gdset" value="② guardduty-blocked-ips&lt;br&gt;GuardDuty 탐지 IP → BLOCK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#2d7600;fontSize=11;fontColor=#2d7600;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="378" width="220" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- global-rate-limit (오른쪽) -->
+        <mxCell id="a-arr-waf-rl" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-rl" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-rl" value="③ global-rate-limit&lt;br&gt;2000 req/5min 초과 → BLOCK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#2d7600;fontSize=11;fontColor=#2d7600;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="348" width="220" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- BLOCKED boxes -->
+        <mxCell id="a-arr-rep-blocked" value="첫 요청 차단" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=11;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-rep" target="a-blocked-a" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-blocked-a" value="🚫  BLOCKED&lt;br&gt;공격자 A 차단" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b85450;strokeColor=#6c0000;fontSize=13;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="470" width="220" height="54" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-arr-rl-blocked" value="임계값 초과 차단" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=11;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-rl" target="a-blocked-b" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-blocked-b" value="🚫  BLOCKED&lt;br&gt;공격자 B 차단" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b85450;strokeColor=#6c0000;fontSize=13;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="470" width="220" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- 정상 사용자 통과: WAF → CloudFront 직접 연결 (WAF가 모든 룰 검사 후 통과) -->
+        <mxCell id="a-norm-lbl" value="정상 사용자" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;fontColor=#2d7600;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="500" width="90" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr-gd-cf" value="통과" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;fontColor=#2d7600;fontSize=11;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-cf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-cf" value="CloudFront" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="560" width="60" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a-alb" value="ALB" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="670" width="60" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr-cf-alb" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;" edge="1" source="a-cf" target="a-alb" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-eks" value="EKS" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="780" width="60" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr-alb-eks" value="" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#2d7600;strokeWidth=1.5;" edge="1" source="a-alb" target="a-eks" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 결과 -->
+        <mxCell id="a-ok" value="✅  3중 방어 완성 — 알려진 악성 IP · 고속 공격 선제 차단" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d7600;strokeColor=#1a4700;fontSize=13;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="858" width="640" height="36" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

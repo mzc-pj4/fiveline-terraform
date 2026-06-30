@@ -38,3 +38,13 @@ output "hosted_zone_id" {
   description = "Route53 Hosted Zone ID (fiveline.store)"
   value       = data.aws_route53_zone.fiveline.zone_id
 }
+
+output "guardduty_blocked_ip_set_arn" {
+  description = "GuardDuty 자동 차단 WAF IP Set ARN (Lambda가 업데이트하는 대상)"
+  value       = aws_wafv2_ip_set.guardduty_blocked_ips.arn
+}
+
+output "guardduty_blocked_ip_set_id" {
+  description = "GuardDuty 자동 차단 WAF IP Set ID"
+  value       = aws_wafv2_ip_set.guardduty_blocked_ips.id
+}
