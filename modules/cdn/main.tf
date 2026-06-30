@@ -48,13 +48,27 @@ resource "aws_s3_bucket_policy" "frontend" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontOAC"
+        Sid    = "AllowCloudFrontOACGetObject"
         Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.frontend.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
+          }
+        }
+      },
+      {
+        Sid    = "AllowCloudFrontOACListBucket"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.frontend.arn
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
@@ -289,6 +303,28 @@ resource "aws_wafv2_ip_set" "admin_allowlist" {
   }
 }
 
+# ════════════════════════════════════════════════════════════════════════════
+# GuardDuty 자동 차단 IP Set (CLOUDFRONT scope — us-east-1)
+# Lambda가 악성 IP를 이 IP Set에 추가 → CloudFront WAF에서 즉시 차단
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_wafv2_ip_set" "guardduty_blocked_ips" {
+  provider           = aws.us_east_1
+  name               = "${local.project}-guardduty-blocked-ips"
+  scope              = "CLOUDFRONT"
+  ip_address_version = "IPV4"
+  addresses          = []
+
+  tags = {
+    Service = "waf"
+    Name    = "${local.project}-guardduty-blocked-ips"
+  }
+
+  lifecycle {
+    ignore_changes = [addresses]
+  }
+}
+
 resource "aws_wafv2_web_acl" "cloudfront" {
   provider    = aws.us_east_1
   name        = "${local.project}-cloudfront-waf"
@@ -300,8 +336,88 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   }
 
   rule {
-    name     = "AWSManagedRulesAmazonIpReputationList"
+    name     = "ecommerce-login-ratelimit"
+    priority = 0
+
+    action {
+      block {
+        custom_response {
+          response_code = 429
+        }
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string         = "/api/auth/login"
+            positional_constraint = "STARTS_WITH"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ecommerce-login-ratelimit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "ecommerce-orders-ratelimit"
     priority = 1
+
+    action {
+      block {
+        custom_response {
+          response_code = 429
+        }
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+
+        scope_down_statement {
+          byte_match_statement {
+            search_string         = "/api/orders"
+            positional_constraint = "STARTS_WITH"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ecommerce-orders-ratelimit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesAmazonIpReputationList"
+    priority = 2
 
     override_action {
       none {}
@@ -323,7 +439,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
-    priority = 2
+    priority = 3
 
     override_action {
       none {}
@@ -345,7 +461,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
-    priority = 3
+    priority = 4
 
     override_action {
       none {}
@@ -367,7 +483,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 4
+    priority = 5
 
     override_action {
       none {}
@@ -389,7 +505,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesAnonymousIpList"
-    priority = 5
+    priority = 6
 
     override_action {
       none {}
@@ -411,7 +527,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   rule {
     name     = "AWSManagedRulesLinuxRuleSet"
-    priority = 6
+    priority = 7
 
     override_action {
       none {}
@@ -431,11 +547,32 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
+  rule {
+    name     = "guardduty-blocked-ips"
+    priority = 8
+
+    action {
+      block {}
+    }
+
+    statement {
+      ip_set_reference_statement {
+        arn = aws_wafv2_ip_set.guardduty_blocked_ips.arn
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "guardduty-blocked-ips"
+      sampled_requests_enabled   = true
+    }
+  }
+
   dynamic "rule" {
     for_each = length(var.admin_allowed_cidrs) > 0 ? [1] : []
     content {
       name     = "admin-ip-allowlist"
-      priority = 7
+      priority = 9
 
       statement {
         and_statement {
@@ -473,6 +610,32 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         metric_name                = "admin-ip-allowlist"
         sampled_requests_enabled   = true
       }
+    }
+  }
+
+  rule {
+    name     = "global-rate-limit"
+    priority = 10
+
+    action {
+      block {
+        custom_response {
+          response_code = 429
+        }
+      }
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "global-rate-limit"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -678,13 +841,6 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
     error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
@@ -758,13 +914,6 @@ resource "aws_cloudfront_distribution" "admin" {
     cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
-  }
-
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
   }
 
   custom_error_response {

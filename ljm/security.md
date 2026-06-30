@@ -1,136 +1,96 @@
-# Fiveline 이커머스 보안 설계
+# Fiveline 보안 설계 — 개인 발표 참고 문서
 
-> 담당: 이재민 (보안 파트) | 최종 업데이트: 2026-06-17
-> 전략: 기본 인프라 보안은 공통 발표, 이커머스 특화 고도화 보안은 개인 발표
-
----
-
-## 발표 전략
-
-### 공통 발표 항목 (기본 인프라 보안 — 당연히 해야 하는 것)
-
-> 이커머스가 아니어도 동일하게 적용. 공통 발표에서 "베이스라인 전부 구축"으로 언급.
-
-| 항목 | 파일 | 비고 |
-|------|------|------|
-| HTTPS 강제 + TLSv1.2_2021 | `cloudfront.tf` | redirect-to-https |
-| ACM 와일드카드 인증서 | `acm.tf` | fiveline.store + *.fiveline.store |
-| S3 OAC + Public Access Block + Versioning | `cloudfront.tf`, `s3_frontend.tf` | S3 직접 접근 차단 |
-| CloudFront 보안 헤더 (HSTS/CSP/X-Frame-Options/Referrer) | `cloudfront.tf` | OWASP Secure Headers |
-| CloudFront Standard Logging v2 | `cloudfront_logging.tf` | ACL 방식 → 버킷 정책 방식 전환 |
-| RDS 저장/전송 암호화 | `rds.tf` | storage_encrypted + TLS |
-| RDS 보안 그룹 격리 + egress 없음 | `rds.tf` | EKS/Workstation SG에서만 허용 |
-| RDS deletion_protection=true + 자동 백업 7일 | `rds.tf` | 랜섬웨어/실수 삭제 방지 |
-| KMS CMK 3개 (etcd/rds/secrets) | `kms.tf` | AWS 관리형 키 대신 고객 통제 키 |
-| GuardDuty + SNS 알림 | `guardduty.tf` | MEDIUM 이상 이메일 알림 |
-| CloudTrail + HTTPS-only 버킷 정책 | `cloudtrail.tf` | 감사 로그 무결성 + 전송 암호화 |
-| VPC Flow Logs | `cloudtrail.tf` | 네트워크 트래픽 감사 |
-| EKS 컨트롤플레인 로그 | `eks.tf` | api/audit/authenticator |
-| OIDC Provider + 인프라 IRSA 3종 | `iam.tf` | LB Controller / ESO / Cluster Autoscaler |
-| IMDSv2 + hop_limit=1 | `eks.tf`, `workstation.tf` | Capital One 동일 경로 SSRF 차단 |
-| WAF 관리형 룰셋 4종 (2-Tier) | `waf.tf` | SQLi/XSS/악성 IP/KnownBad |
-| Pod SecurityContext | `fiveline_k8s_manifest` repo | runAsNonRoot, capabilities DROP ALL |
-| Workstation associate_public_ip_address=false | `workstation.tf` | private subnet 배치, SSM 전용 |
-| EKS private endpoint 5-layer 설계 | `eks.tf`, `network.tf`, `iam.tf` | endpoint_public_access=false + SG + IAM + RBAC |
-| Zero Trust: IRSA(N-S) + VPC CNI NetworkPolicy(E-W) | `iam.tf`, `eks.tf`, `fiveline_k8s_manifest` | 남북/동서 양축 Pod 격리 |
-| CSP unsafe-inline 제거 | `cloudfront.tf` | Magecart 웹스키밍 방어 |
-| pgaudit (PII 데이터 감사) | `rds.tf` | PIPA 제29조 접근 기록 의무 준수 |
+> 담당: 이재민 (보안 파트)  
+> 시나리오: 무신사/올리브영 수준 이커머스 기업으로부터 인프라 아키텍처 설계를 의뢰받은 MSP
 
 ---
 
-### 개인 발표 핵심 (이커머스 특화 고도화 보안)
+## 발표 구성 요약
 
-> "일반 인프라 보안은 '누가 들어오나'를 막습니다.
-> 이커머스 고도화 보안은 **정상처럼 생긴 공격**, **공급망**, **AI/데이터 무결성**을 지킵니다."
-
-| # | 항목 | 위협 시나리오 | 성숙도 | 상태 |
-|---|------|-------------|--------|------|
-| 1 | **이커머스 특화 WAF Custom Rate Limit** | 크리덴셜 스터핑 / 재고 봇 / 카드 BIN 어택 | 선도기업 | ✅ |
-| 2 | **이미지 서명 (Cosign + Kyverno)** | ECR 이미지 변조 → ArgoCD가 악성 이미지 배포 | 표준화 진행 중 | ⬜ |
-| 3 | **Manifest Repo PR만 허용** | GitHub Actions 토큰 탈취 → Manifest 직접 푸시 | 업계 표준 | ⬜ |
-| 4 | **ArgoCD Admission + GitOps 무결성 감시** | ArgoCD 탈취 후 K8s 리소스 수동 변조 | 업계 표준 | ⬜ |
-| 5 | **간접 프롬프트 인젝션 방어** | 상품 리뷰 악성 지시문 → 데이터 파이프라인 → Bedrock 오염 | 연구~초기 도입 | ⬜ |
-| 6 | **로그 위조 / Metric Poisoning 차단** | 침해 Pod이 가짜 ORDER_SUCCESS 발행 → AI 리포트 오염 | 선도/고급 커스텀 | ⬜ |
-| 7 | **로그 파이프라인 무력화 탐지** | 공격자가 Firehose/Fluent Bit 삭제로 흔적 제거 | 업계 표준 (SRE) | ⬜ |
-| 8 | **pgaudit ↔ 앱 로그 교차검증** | 앱 우회 후 DB 직접 대량 SELECT — 앱 로그에 흔적 없음 | 선도/고급 커스텀 | ⬜ |
-| 9 | **재고 Hoarding 봇 탐지** | 카트 담기만 반복해 재고 묶기 → WAF Rate Limit으론 안 잡힘 | 선도기업 적용 | ⬜ |
+| # | 항목 | 위협 시나리오 | 상태 |
+|---|------|-------------|------|
+| 1 | 이커머스 특화 WAF Custom Rate Limit | 크리덴셜 스터핑 / 카드 BIN 어택 / 가격 스크래핑 | ✅ |
+| 2 | GuardDuty → Lambda → WAF 자동 차단 (Reactive SOAR) | 탐지~차단 사이 수동 대응 공백 | ✅ |
 
 ---
 
 ## 1. 이커머스 특화 WAF Custom Rate Limit ✅
 
-### 관리형 룰셋이 못 막는 이커머스 특화 공격
+### 왜 필요한가
 
-| 공격 | 형태 | 관리형 룰셋 | 피해 |
-|------|------|------------|------|
-| **크리덴셜 스터핑** | 유출 ID/PW를 `/api/auth/login`에 초당 수천 건 | **차단 불가** (정상 POST 요청) | 계정 탈취 → 포인트/결제수단 도용 |
-| **재고 선점 봇** | 한정판 장바구니 자동 선점 (`/api/cart/items`) | **차단 불가** | 실고객 구매 불가 |
-| **카드 BIN 어택** | 훔친 카드번호를 `/api/orders`에 대량 검증 | **차단 불가** | 결제사 제재, 매출 손실 |
-| **가격 스크래핑** | 전 상품 가격 자동 수집 (`/api/products`) | **차단 불가** | 경쟁사에 가격 정책 노출 |
+AWS 관리형 룰셋은 SQLi, XSS 등 패턴 기반 공격을 탐지한다.
+이커머스를 실제로 위협하는 공격은 **형식이 완전히 정상인 HTTP 요청**이어서 관리형 룰셋으로 탐지할 수 없다.
 
-모두 **정상 HTTP 요청처럼 생겼기 때문에** 관리형 룰셋이 탐지 불가.
+| 공격 | 방식 | 피해 |
+|------|------|------|
+| 크리덴셜 스터핑 | 유출된 ID/PW를 `/api/auth/login`에 대량 대입 | 계정 탈취 → 포인트/결제수단 도용 |
+| 카드 BIN 어택 | 훔친 카드번호를 `/api/orders/from-cart`에 대량 검증 | 결제사 제재, 매출 손실 |
 
-### 구현: 엔드포인트별 Rate Limit (waf.tf)
+### 구현
 
-| 공격 | 엔드포인트 | Rate Limit |
-|------|-----------|-----------|
-| 크리덴셜 스터핑 | `/api/auth/login` | IP당 5분 100회 초과 → 차단 |
-| 카드 BIN 어택 | `/api/orders` | IP당 5분 20회 초과 → 차단 |
-| 가격 스크래핑 | `/api/products` | IP당 1분 200회 초과 → 차단 |
+**배치 위치: CloudFront WAF (us-east-1)**
 
-Regional WAF Web ACL에 `priority=0`으로 연결 → 관리형 룰셋보다 먼저 평가.
+Regional WAF는 ALB 앞에 위치하므로 CloudFront Edge IP만 보고, 실제 공격자 IP를 식별할 수 없다. 실제 클라이언트 IP가 보이는 CloudFront WAF에 Rate Limit을 배치해야 한다.
 
-**발표 포인트**: "관리형 룰셋은 AWS가 아는 공격을 막습니다. 이커머스를 겨냥한 공격은 **우리 비즈니스 로직을 이해한 커스텀 룰**이 필요합니다."
+**CloudFront WAF — 모든 이커머스 Rate Limit 통합 배치 (modules/cdn/main.tf)**
+
+Regional WAF는 ALB 앞에서 CloudFront Edge IP만 본다. `aggregate_key_type = "IP"` 기준 집계가 개별 공격자 IP가 아닌 Edge IP 기준으로 동작하므로, 실제 클라이언트 IP가 보이는 CloudFront WAF에 모든 rate limit을 배치한다.
+
+```
+/api/auth/login  → 100 req / 5min  (priority 0 — 크리덴셜 스터핑)
+/api/orders      → 100 req / 5min  (priority 1 — 카드 BIN 어택)
+```
+
+임계값 근거: 정상 사용자는 5분 내 로그인 100회, 결제 100회를 시도하지 않는다. 봇은 초당 수백 건 시도한다.
+
+### 한계
+
+IP 변경(프록시/봇넷 사용)으로 우회 가능하다. WAF Rate Limit은 1차 방어선이며, 애플리케이션 레벨 Rate Limit(IP당 1분 10회) + Account Lockout(5회 실패 시 잠금)과 계층화해야 완전한 방어가 된다.
 
 ---
 
-## 전체 구현 현황
+## 2. GuardDuty 자동 대응: Reactive SOAR ✅
 
-### 공통 발표 항목
+### 설계 배경
 
-| 항목 | 파일 | 상태 |
-|------|------|------|
-| HTTPS 강제 + TLSv1.2_2021 | `cloudfront.tf` | ✅ |
-| ACM 인증서 | `acm.tf` | ✅ |
-| S3 OAC + Public Block + Versioning | `s3_frontend.tf` | ✅ |
-| CloudFront 보안 헤더 (HSTS/CSP/X-Frame-Options) | `cloudfront.tf` | ✅ |
-| CloudFront Standard Logging v2 | `cloudfront_logging.tf` | ✅ |
-| RDS 저장/전송 암호화 + SG 격리 | `rds.tf` | ✅ |
-| RDS deletion_protection + 자동 백업 | `rds.tf` | ✅ |
-| RDS egress 없음 (SG stateful) | `rds.tf` | ✅ |
-| KMS CMK 3개 | `kms.tf` | ✅ |
-| GuardDuty + SNS 알림 | `guardduty.tf` | ✅ |
-| CloudTrail + HTTPS-only + lifecycle | `cloudtrail.tf` | ✅ |
-| VPC Flow Logs | `cloudtrail.tf` | ✅ |
-| EKS 컨트롤플레인 로그 | `eks.tf` | ✅ |
-| OIDC + 인프라 IRSA 3종 | `iam.tf` | ✅ |
-| IMDSv2 + hop_limit=1 | `eks.tf`, `workstation.tf` | ✅ |
-| WAF 관리형 룰셋 4종 (2-Tier) | `waf.tf` | ✅ |
-| Pod SecurityContext | `fiveline_k8s_manifest` repo | ✅ |
-| Workstation associate_public_ip_address=false | `workstation.tf` | ✅ |
-| EKS private endpoint 5-layer 설계 | `eks.tf`, `network.tf`, `iam.tf` | ✅ |
-| Zero Trust: IRSA 8종 + VPC CNI NetworkPolicy | `iam.tf`, `eks.tf`, `fiveline_k8s_manifest` | ✅ |
-| CSP unsafe-inline 제거 | `cloudfront.tf` | ✅ |
-| pgaudit (read/write/ddl 감사) | `rds.tf` | ✅ |
+GuardDuty가 탐지해도 차단은 수동이었다. 보안 담당자가 콘솔에 접속해 WAF 룰을 추가하는 수분~수시간의 공백 동안 공격이 지속된다.
 
-### 개인 발표 항목
+목표: **탐지와 차단 사이의 지연을 제거한다.**
 
-| 항목 | 파일 | 상태 |
-|------|------|------|
-| WAF Custom Rate Limit (로그인/결제/상품) | `waf.tf` | ✅ |
-| 이미지 서명 (Cosign + Kyverno) | GitHub Actions, `fiveline_k8s_manifest` | ⬜ |
-| Manifest Repo PR만 허용 | GitHub 설정, GitHub Actions | ⬜ |
-| ArgoCD Admission + GitOps 무결성 감시 | `fiveline_k8s_manifest`, CloudWatch | ⬜ |
-| 간접 프롬프트 인젝션 방어 | Glue ETL, Bedrock Guardrails | ⬜ |
-| 로그 위조 / Metric Poisoning 차단 | Glue Data Quality, Fluent Bit | ⬜ |
-| 로그 파이프라인 무력화 탐지 | CloudWatch Alarm, EventBridge | ⬜ |
-| pgaudit ↔ 앱 로그 교차검증 | Athena, CloudWatch | ⬜ |
-| 재고 Hoarding 봇 탐지 | WAF IPSet, DynamoDB, EventBridge | ⬜ |
+### 구현
 
-### 프로젝트 범위 외
+**① EventBridge — severity 기준 2개 룰 분리**
 
-| 항목 | 비고 |
-|------|------|
-| Secrets Manager ESO 실제 연동 | K8s manifest — 앱팀 담당 |
-| ALB Access Logs | LB Controller 배포 후 Ingress annotation |
-| ECR Enhanced Scanning | Inspector 비용 발생, 별도 판단 |
+| 룰 | 조건 | 대응 |
+|----|------|------|
+| Rule 1 | severity ≥ 4 (MEDIUM+) | SNS → 이메일 알림 |
+| Rule 2 | severity ≥ 7 (HIGH+) | Lambda → WAF IP Set 자동 추가 |
+
+HIGH finding은 두 룰 동시 발화 → 이메일 알림 + 자동 차단 병행.
+
+**자동 차단을 HIGH(≥7)에만 적용하는 이유**: 자동 차단은 오탐 시 정상 사용자를 차단하는 파괴적 액션이다. 신뢰도가 높은 HIGH finding에만 적용하고, MEDIUM은 사람이 판단할 수 있도록 알림에 머문다.
+
+**② Lambda — Finding에서 IP 추출 → WAF IP Set 업데이트**
+
+GuardDuty Finding의 3가지 액션 타입에서 공격자 IP 추출:
+- `networkConnectionAction` → `remoteIpDetails.ipAddressV4`
+- `awsApiCallAction` → `remoteIpDetails.ipAddressV4`
+- `portProbeAction` → `portProbeDetails[0].remoteIpDetails.ipAddressV4`
+
+이미 차단된 IP는 skip(중복 체크). LockToken 기반 optimistic locking으로 동시성 보장.
+
+**③ CloudFront WAF — guardduty-blocked-ips IP Set (priority 7)**
+
+Lambda가 추가한 IP는 이후 모든 요청에서 즉시 BLOCK.
+
+### 구조적 한계
+
+Reactive 방식의 태생적 한계: GuardDuty는 반복 패턴 누적 후 탐지한다.
+**신규 악성 IP의 첫 번째 요청은 탐지 이전이므로 EKS까지 통과한다.**
+
+### 알려진 개선 항목 (to-be)
+
+| 항목 | 현재 | 개선 방향 |
+|------|------|---------|
+| DLQ 미설치 | 동시 HIGH finding 시 `WAFOptimisticLockException` → 차단 이벤트 소실 가능 | EventBridge target에 `retry_policy` + SQS DLQ 추가 |
+| IP Set TTL 없음 | IP 누적만 되고 제거 메커니즘 없음 → 오탐 IP 영구 차단, 10,000개 한도 위험 | DynamoDB에 차단 시각 기록 + sweeper Lambda로 N일 후 자동 해제 |

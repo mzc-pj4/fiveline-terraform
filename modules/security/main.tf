@@ -120,6 +120,190 @@ resource "aws_sns_topic_subscription" "security_alerts_email" {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
+# GuardDuty Auto-remediation: Lambda → WAF IP Set 자동 차단
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_iam_role" "guardduty_auto_block" {
+  name = "${local.project}-guardduty-auto-block"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block-role"
+  }
+}
+
+resource "aws_iam_role_policy" "guardduty_auto_block" {
+  name = "${local.project}-guardduty-auto-block-policy"
+  role = aws_iam_role.guardduty_auto_block.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["wafv2:GetIPSet", "wafv2:UpdateIPSet"]
+        Resource = var.guardduty_blocked_ip_set_arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.security_alerts.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = var.kms_secrets_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
+data "archive_file" "guardduty_auto_block" {
+  type        = "zip"
+  output_path = "${path.module}/guardduty_auto_block.zip"
+
+  source {
+    content  = <<-EOT
+      import boto3, json, os
+
+      def lambda_handler(event, context):
+          detail = event.get('detail', {})
+          action = detail.get('service', {}).get('action', {})
+
+          remote_ip = None
+          if 'networkConnectionAction' in action:
+              remote_ip = action['networkConnectionAction']['remoteIpDetails']['ipAddressV4']
+          elif 'awsApiCallAction' in action:
+              remote_ip = action['awsApiCallAction'].get('remoteIpDetails', {}).get('ipAddressV4')
+          elif 'portProbeAction' in action:
+              probes = action['portProbeAction'].get('portProbeDetails', [])
+              if probes:
+                  remote_ip = probes[0]['remoteIpDetails']['ipAddressV4']
+
+          if not remote_ip:
+              print(f"No IP in finding: {detail.get('type', 'unknown')}")
+              return {'statusCode': 200, 'body': 'No IP to block'}
+
+          ip_cidr = f"{remote_ip}/32"
+          waf = boto3.client('wafv2', region_name='us-east-1')
+
+          resp = waf.get_ip_set(
+              Name=os.environ['WAF_IP_SET_NAME'],
+              Scope='CLOUDFRONT',
+              Id=os.environ['WAF_IP_SET_ID']
+          )
+          addresses = resp['IPSet']['Addresses']
+
+          if ip_cidr not in addresses:
+              waf.update_ip_set(
+                  Name=os.environ['WAF_IP_SET_NAME'],
+                  Scope='CLOUDFRONT',
+                  Id=os.environ['WAF_IP_SET_ID'],
+                  Addresses=addresses + [ip_cidr],
+                  LockToken=resp['LockToken']
+              )
+              boto3.client('sns').publish(
+                  TopicArn=os.environ['SNS_TOPIC_ARN'],
+                  Subject='[Fiveline] GuardDuty 자동 차단 완료',
+                  Message=f"악성 IP {ip_cidr} WAF IP Set 자동 추가 완료\n유형: {detail.get('type','unknown')}\n심각도: {detail.get('severity','unknown')}"
+              )
+              print(f"Blocked: {ip_cidr}")
+          else:
+              print(f"Already blocked: {ip_cidr}")
+
+          return {'statusCode': 200, 'body': ip_cidr}
+    EOT
+    filename = "lambda_function.py"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "guardduty_auto_block" {
+  name              = "/aws/lambda/${local.project}-guardduty-auto-block"
+  retention_in_days = 30
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block-logs"
+  }
+}
+
+resource "aws_lambda_function" "guardduty_auto_block" {
+  filename         = data.archive_file.guardduty_auto_block.output_path
+  function_name    = "${local.project}-guardduty-auto-block"
+  role             = aws_iam_role.guardduty_auto_block.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.12"
+  source_code_hash = data.archive_file.guardduty_auto_block.output_base64sha256
+  timeout          = 30
+
+  environment {
+    variables = {
+      WAF_IP_SET_ID   = var.guardduty_blocked_ip_set_id
+      WAF_IP_SET_NAME = "${local.project}-guardduty-blocked-ips"
+      SNS_TOPIC_ARN   = aws_sns_topic.security_alerts.arn
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.guardduty_auto_block]
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-auto-block"
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "guardduty_high_findings" {
+  name        = "${local.project}-guardduty-high-findings"
+  description = "GuardDuty HIGH 심각도 Finding → Lambda 자동 차단"
+  is_enabled  = true
+
+  event_pattern = jsonencode({
+    source      = ["aws.guardduty"]
+    detail-type = ["GuardDuty Finding"]
+    detail = {
+      severity = [{ numeric = [">=", 7] }]
+    }
+  })
+
+  tags = {
+    Service = "guardduty"
+    Name    = "${local.project}-guardduty-high-rule"
+  }
+}
+
+resource "aws_lambda_permission" "guardduty_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.guardduty_auto_block.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.guardduty_high_findings.arn
+}
+
+resource "aws_cloudwatch_event_target" "guardduty_to_lambda" {
+  rule      = aws_cloudwatch_event_rule.guardduty_high_findings.name
+  target_id = "GuardDutyToLambda"
+  arn       = aws_lambda_function.guardduty_auto_block.arn
+}
+
+# ════════════════════════════════════════════════════════════════════════════
 # ════════════════════════════════════════════════════════════════════════════
 # CloudTrail + VPC Flow Logs
 # ════════════════════════════════════════════════════════════════════════════
@@ -338,134 +522,6 @@ resource "aws_flow_log" "fiveline_vpc" {
 # CloudFront WAF는 cdn 모듈에서 관리 (cloudfront distribution과 동일 모듈)
 # ════════════════════════════════════════════════════════════════════════════
 
-# ── 이커머스 특화 Custom Rule Group (REGIONAL) ────────────────────────────
-
-resource "aws_wafv2_rule_group" "ecommerce_ratelimit" {
-  name        = "${local.project}-ecommerce-ratelimit"
-  scope       = "REGIONAL"
-  capacity    = 100
-  description = "E-commerce Rate Limit rules - blocks credential stuffing and card BIN attacks"
-
-  rule {
-    name     = "login-rate-limit"
-    priority = 1
-
-    statement {
-      rate_based_statement {
-        limit              = 100
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/users/login"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "login-rate-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "checkout-rate-limit"
-    priority = 2
-
-    statement {
-      rate_based_statement {
-        limit              = 100
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/orders"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "checkout-rate-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "product-scraping-limit"
-    priority = 3
-
-    statement {
-      rate_based_statement {
-        limit              = 500
-        aggregate_key_type = "IP"
-
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/api/products"
-            positional_constraint = "STARTS_WITH"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "LOWERCASE"
-            }
-          }
-        }
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "product-scraping-limit"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${local.project}-ecommerce-ratelimit"
-    sampled_requests_enabled   = true
-  }
-
-  tags = {
-    Name    = "${local.project}-ecommerce-ratelimit"
-    Service = "waf"
-  }
-}
-
 # ── Regional WAF (ap-northeast-2) ────────────────────────────────────────
 
 resource "aws_wafv2_web_acl" "regional" {
@@ -513,29 +569,8 @@ resource "aws_wafv2_web_acl" "regional" {
   }
 
   rule {
-    name     = "ecommerce-ratelimit"
-    priority = 1
-
-    statement {
-      rule_group_reference_statement {
-        arn = aws_wafv2_rule_group.ecommerce_ratelimit.arn
-      }
-    }
-
-    override_action {
-      none {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "ecommerce-ratelimit-group"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
     name     = "AWSManagedRulesAmazonIpReputationList"
-    priority = 2
+    priority = 1
 
     override_action {
       none {}
@@ -557,7 +592,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
-    priority = 3
+    priority = 2
 
     override_action {
       none {}
@@ -579,7 +614,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
-    priority = 4
+    priority = 3
 
     override_action {
       none {}
@@ -601,7 +636,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   rule {
     name     = "AWSManagedRulesAnonymousIpList"
-    priority = 5
+    priority = 4
 
     override_action {
       none {}
@@ -622,8 +657,8 @@ resource "aws_wafv2_web_acl" "regional" {
   }
 
   rule {
-    name     = "AWSManagedRulesLinuxRuleSet"
-    priority = 6
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 5
 
     override_action {
       none {}
@@ -631,14 +666,14 @@ resource "aws_wafv2_web_acl" "regional" {
 
     statement {
       managed_rule_group_statement {
-        name        = "AWSManagedRulesLinuxRuleSet"
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "RegionalAWSManagedRulesLinuxRuleSet"
+      metric_name                = "RegionalAWSManagedRulesKnownBadInputsRuleSet"
       sampled_requests_enabled   = true
     }
   }
