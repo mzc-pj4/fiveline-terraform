@@ -1,0 +1,158 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="WAF Rate Limit 아키텍처" id="pg-arch">
+    <mxGraphModel dx="1422" dy="762" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- BEFORE PANEL -->
+        <mxCell id="b-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff7e6;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="680" height="840" as="geometry" />
+        </mxCell>
+        <mxCell id="b-ttl" value="BEFORE" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="30" y="40" width="680" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="b-sttl" value="이커머스 특화 Rate Limit 없음" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#aaaaaa;" vertex="1" parent="1">
+          <mxGeometry x="30" y="76" width="680" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-atk-lb" value="🧑‍💻  공격자" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="245" y="112" width="200" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="b-atk" value="크리덴셜 스터핑 / 카드 BIN 어택" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontColor=#b85450;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="215" y="140" width="260" height="54" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-arr1" value="무제한 요청" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=12;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-atk" target="b-cf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-cf" value="CloudFront" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="315" y="248" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-arr2" value="Rate Limit 없음 → 통과" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=12;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-cf" target="b-alb" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-alb" value="ALB" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="315" y="408" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-arr3" value="차단 없음" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=12;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-alb" target="b-eks" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-eks" value="EKS" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="315" y="558" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-arr4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="b-eks" target="b-result" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="b-result" value="❌  공격 성공" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b85450;strokeColor=#6c0000;fontSize=16;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="215" y="686" width="260" height="64" as="geometry" />
+        </mxCell>
+
+        <!-- CENTER ARROW -->
+        <mxCell id="ctr-arr" value="고도화" style="strokeColor=#2d7600;strokeWidth=3;fontColor=#2d7600;fontSize=14;fontStyle=1;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="718" y="450" as="sourcePoint" />
+            <mxPoint x="882" y="450" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- AFTER PANEL -->
+        <mxCell id="a-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fff4;strokeColor=#2d7600;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="890" y="30" width="680" height="840" as="geometry" />
+        </mxCell>
+        <mxCell id="a-ttl" value="AFTER" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#2d7600;" vertex="1" parent="1">
+          <mxGeometry x="890" y="40" width="680" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="a-sttl" value="CloudFront WAF 이커머스 Rate Limit" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#aaaaaa;" vertex="1" parent="1">
+          <mxGeometry x="890" y="76" width="680" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- 공격자 (center x=1205) -->
+        <mxCell id="a-atk-lb" value="🧑‍💻  공격자" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=15;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1105" y="112" width="200" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="a-atk" value="크리덴셜 스터핑 / 카드 BIN 어택" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontColor=#b85450;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1075" y="140" width="260" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- WAF (center x=1205) -->
+        <mxCell id="a-waf" value="CloudFront WAF" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fontStyle=1;fontColor=#2d7600;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1175" y="248" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: 공격자 → WAF -->
+        <mxCell id="a-arr1" value="요청" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=12;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-atk" target="a-waf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LEFT: Rate limit rules (WAF exits left, rules to the left of WAF) -->
+        <mxCell id="a-rule1" value="ecommerce-login-ratelimit&lt;br&gt;/api/auth/login — 100 req/5min" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#2d7600;fontSize=11;fontColor=#2d7600;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="350" width="220" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="a-rule2" value="ecommerce-orders-ratelimit&lt;br&gt;/api/orders — 100 req/5min" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#2d7600;fontSize=11;fontColor=#2d7600;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="414" width="220" height="44" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: WAF → rules (exit left side, enter right side of rule boxes) -->
+        <mxCell id="a-arr-r1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2d7600;strokeWidth=1.5;exitX=0;exitY=0.3;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-rule1" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr-r2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2d7600;strokeWidth=1.5;exitX=0;exitY=0.7;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-rule2" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- BLOCKED box -->
+        <mxCell id="a-blocked" value="🚫  BLOCKED  429" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b85450;strokeColor=#6c0000;fontSize=16;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="910" y="510" width="200" height="54" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: rules → BLOCKED -->
+        <mxCell id="a-arr2" value="임계값 초과" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=11;fontStyle=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-rule1" target="a-blocked" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-arr3" value="임계값 초과" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=11;fontStyle=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.7;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-rule2" target="a-blocked" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- RIGHT: 정상 요청 → CloudFront → ALB → EKS → ✅ (WAF exits right) -->
+        <mxCell id="a-norm-arr" value="정상 요청 통과" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#2d7600;strokeWidth=2;fontColor=#2d7600;fontSize=12;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" source="a-waf" target="a-cf" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-cf" value="CloudFront" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="348" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-alb" value="ALB" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="490" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-eks" value="EKS" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eks;html=1;labelBackgroundColor=none;sketch=0;fontSize=11;fillColor=#d5e8d4;strokeColor=#2d7600;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="630" width="60" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-n1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#2d7600;strokeWidth=1.5;" edge="1" source="a-cf" target="a-alb" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-n2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#2d7600;strokeWidth=1.5;" edge="1" source="a-alb" target="a-eks" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-ok" value="✅  정상 처리" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2d7600;strokeColor=#1a4700;fontSize=16;fontStyle=1;fontColor=#ffffff;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="762" width="140" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="a-n3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#2d7600;strokeWidth=1.5;" edge="1" source="a-eks" target="a-ok" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

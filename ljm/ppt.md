@@ -173,13 +173,13 @@ kubectl 명령 가능 (누구든)          Workstation EC2 (private subnet)
 
 ---
 
-## 슬라이드 5 — GuardDuty 자동 대응 고도화: 2-1 → 2-2 (2분)
+## 슬라이드 5 — GuardDuty 자동 대응 고도화: 2번 Reactive SOAR (2분)
 
 **제목**: 탐지에서 차단까지 — 자동화로 공백을 없앤다
 
 ---
 
-**[2-1] Reactive SOAR: GuardDuty → Lambda → WAF**
+**[2] Reactive SOAR: GuardDuty → Lambda → WAF**
 
 ```
 문제: GuardDuty가 탐지해도 수동 대응 → 공백 시간 동안 공격 지속
@@ -200,48 +200,16 @@ kubectl 명령 가능 (누구든)          Workstation EC2 (private subnet)
 | 악성 IP 차단 | 수분~수시간 공백 | 수 초 내 완료 |
 | 알림 | 없음 | 이메일 자동 발송 |
 
-**[2-1 한계]**: 첫 번째 요청은 탐지 전이라 EKS까지 통과함 (Reactive 구조의 태생적 한계)
-
----
-
-**[2-2] Proactive 추가: IP Reputation List + Rate-based Rule**
-
-```
-2-1 한계 보완: 알려진 악성 IP와 고속 반복 공격은 탐지 전에 차단
-
-① IP Reputation List (AWS Managed)
-   → AWS가 관리하는 악성 IP DB (봇 / C&C / Tor)
-   → 첫 요청부터 즉시 차단
-
-② Rate-based Rule (2000req / 5min)
-   → 동일 IP 고속 반복 요청 → Brute Force 선제 차단
-
-3중 방어:
-  알려진 악성 IP ──→ IP Reputation List (Proactive)
-  고속 반복 공격 ──→ Rate-based Rule     (Proactive)
-  신규 미탐지 IP  ──→ GuardDuty → Lambda (Reactive)
-```
-
 **발표 멘트**:
 
-*[2-1 설명]*
+*[2번 설명]*
 > "GuardDuty가 탐지만 하고 차단은 사람이 해야 했던 구조를 바꿨습니다.
 > HIGH severity Finding이 발생하면 EventBridge가 Lambda를 트리거하고,
 > Lambda가 WAF IP Set에 악성 IP를 자동으로 등록합니다.
 > 수 초 안에 차단이 완료됩니다.
 > 별도 SOAR 솔루션 없이 AWS 네이티브 서비스 조합으로 Auto-remediation을 구현했습니다."
 
-*[2-1 한계 언급]*
-> "다만 이 구조는 탐지 후 대응이라 첫 번째 요청은 막을 수 없습니다.
-> 이것이 Reactive 방식의 구조적 한계입니다."
-
-*[2-2 설명]*
-> "이 한계를 보완하기 위해 두 가지 Proactive 레이어를 추가했습니다.
-> 하나는 AWS가 관리하는 IP Reputation List — 이미 알려진 봇, C&C 서버 IP를 첫 요청부터 차단합니다.
-> 다른 하나는 Rate-based Rule — 동일 IP에서 5분에 2000회 초과 시 선제 차단합니다.
-> 세 레이어가 조합되면 알려진 악성 IP, 고속 공격, 신규 IP 모두를 커버하는 Defense-in-Depth가 완성됩니다."
-
-**비주얼**: 좌(2-1 BEFORE/AFTER 흐름도) / 우(2-2 3중 방어 레이어 표)
+**비주얼**: BEFORE/AFTER 흐름도
 **스크린샷**: WAF IP Sets 콘솔에서 Lambda가 자동 추가한 IP 확인 화면
 
 ---
@@ -302,11 +270,11 @@ Policy 적용 시:
 
 ---
 
-## 슬라이드 7 — 웹스키밍 방어 + PII 데이터 감사 (1.5분)
+## 슬라이드 7 — 웹스키밍 방어: CSP 강화 (1.5분)
 
-**제목**: 결제 카드 탈취를 막고, 내부자 조회도 기록한다
+**제목**: 결제 카드 탈취를 막는다
 
-**좌측 — CSP 강화 (웹스키밍 방어)**:
+**CSP 강화 (웹스키밍 방어)**:
 
 ```
 Magecart 공격:
@@ -324,28 +292,12 @@ Magecart 공격:
   (unsafe-inline 제거 → 브라우저가 인라인 스크립트 실행 자체를 차단)
 ```
 
-**우측 — pgaudit (PII 데이터 감사)**:
-
-```
-RDS storage_encrypted=true 의 한계:
-  디스크 도난 → ✅ 막음
-  SQL로 정상 접근 → ❌ 평문 그대로
-
-pgaudit 적용 후 (rds.tf):
-  누가(user=admin) 어디서(client=10.10.2.15)
-  어떤 쿼리로(SELECT * FROM users LIMIT 100000)
-  언제 실행했는지 → CloudWatch에 기록
-
-= 내부자가 회원 100만 건 조회 시 즉시 탐지
-= 개인정보보호법 제29조 (접근 기록 6개월 보관) 준수
-```
-
 **발표 멘트**:
-> "두 가지 모두 '아무도 못 보는 디테일'입니다.
-> 보안 헤더를 달았다고 끝이 아닙니다. unsafe-inline 하나가 XSS 방어 전체를 무력화합니다.
-> RDS 암호화를 켰다고 끝이 아닙니다. SQL로 접근하면 평문입니다. pgaudit이 그 접근을 기록합니다."
+> "'보안 헤더를 달았다'고 끝이 아닙니다.
+> unsafe-inline 하나가 XSS 방어 전체를 무력화합니다.
+> British Airways는 이 결함으로 $230M 과징금을 맞았습니다."
 
-**비주얼**: 좌/우 2분할. Before/After 코드 블록 (검은 배경)
+**비주얼**: Before/After 코드 블록 (검은 배경)
 
 ---
 
@@ -358,8 +310,7 @@ pgaudit 적용 후 (rds.tf):
 | 이커머스 특화 위협 | 방어 설계 | 상태 |
 |----------------|---------|------|
 | 크리덴셜 스터핑 / 재고 봇 / 카드 BIN | WAF Custom Rate Limit | ✅ |
-| 악성 IP 탐지 후 수동 대응 지연 | GuardDuty → Lambda → WAF 자동 차단 (2-1) | ✅ |
-| 첫 요청 통과 (Reactive 한계) | IP Reputation List + Rate-based Rule (2-2) | ✅ |
+| 악성 IP 탐지 후 수동 대응 지연 | GuardDuty → Lambda → WAF 자동 차단 (2번) | ✅ |
 | K8s API 인터넷 노출 | EKS private endpoint + SSM 접근 경로 | ✅ |
 | Pod 침해 후 내부 이동 | IRSA(N-S) + VPC CNI NetworkPolicy(E-W) | ✅ |
 | 결제 페이지 웹스키밍 | CSP unsafe-inline 제거 | ✅ |
@@ -425,8 +376,8 @@ CloudFront 보안 헤더 · CloudFront Standard Logging v2
 | 2 | 이커머스 위협 모델 | 1분 30초 |
 | 3 | EKS 접근 경로 설계 | 1분 30초 |
 | 4 | 이커머스 WAF Custom Rate Limit | 2분 |
-| 5 | GuardDuty 자동 대응 (2-1 → 2-2) | 2분 |
+| 5 | GuardDuty 자동 대응 (2번 SOAR) | 2분 |
 | 6 | Zero Trust 완성 | 1분 30초 |
-| 7 | CSP + pgaudit | 1분 30초 |
+| 7 | CSP 웹스키밍 방어 | 1분 30초 |
 | 8 | 종합 + 클로징 | 1분 |
-| | **합계** | **~11.5분** |
+| | **합계** | **~10분** |

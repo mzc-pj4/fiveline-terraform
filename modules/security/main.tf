@@ -159,6 +159,11 @@ resource "aws_iam_role_policy" "guardduty_auto_block" {
         Resource = aws_sns_topic.security_alerts.arn
       },
       {
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = var.kms_secrets_arn
+      },
+      {
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
@@ -268,6 +273,7 @@ resource "aws_lambda_function" "guardduty_auto_block" {
 resource "aws_cloudwatch_event_rule" "guardduty_high_findings" {
   name        = "${local.project}-guardduty-high-findings"
   description = "GuardDuty HIGH 심각도 Finding → Lambda 자동 차단"
+  is_enabled  = true
 
   event_pattern = jsonencode({
     source      = ["aws.guardduty"]
