@@ -195,6 +195,32 @@ resource "aws_kinesis_firehose_delivery_stream" "service_events" {
     buffering_size     = 5
     buffering_interval = 60
     compression_format = "GZIP"
+
+    # CloudWatch Logs subscription filter 에서 오는 데이터 처리
+    #   1. Decompression: CW Logs 가 gzip 으로 압축해서 보내므로 해제
+    #   2. CloudWatchLogProcessing: JSON payload 의 logEvents 배열에서 message 만 추출
+    # 이 두 처리가 없으면 S3 에 gzip(base64) 이진 데이터가 저장되어 Athena 파싱 불가
+    processing_configuration {
+      enabled = "true"
+
+      processors {
+        type = "Decompression"
+
+        parameters {
+          parameter_name  = "CompressionFormat"
+          parameter_value = "GZIP"
+        }
+      }
+
+      processors {
+        type = "CloudWatchLogProcessing"
+
+        parameters {
+          parameter_name  = "DataMessageExtraction"
+          parameter_value = "true"
+        }
+      }
+    }
   }
 
   tags = {
@@ -592,9 +618,17 @@ resource "aws_iam_role_policy" "logs_to_firehose" {
 # ── Subscription Filter: service-events → Firehose ───────────────────────────
 
 resource "aws_cloudwatch_log_subscription_filter" "service_events_to_firehose" {
-  name            = "${local.project}-service-events-to-firehose"
-  log_group_name  = aws_cloudwatch_log_group.eks_logs["service_events"].name
-  filter_pattern  = ""
+  name = "${local.project}-service-events-to-firehose"
+
+  # Container Insights 가 자동으로 만든 로그 그룹 (모든 fiveline Pod 로그가 여기 옴)
+  # 원래 설계는 Fluent Bit 이 별도 로그 그룹(/aws/eks/fiveline/service-events)으로
+  # 서비스 이벤트만 분리해서 보내는 것이었으나, 현재 Fluent Bit ConfigMap 이
+  # Container Insights 로만 로그를 보내고 있어 그 로그 그룹은 비어있는 상태.
+  # → 실용적으로 Container Insights 로그 그룹을 직접 사용하고
+  #   filter_pattern 으로 fiveline 네임스페이스 로그만 추출.
+  log_group_name = "/aws/containerinsights/fiveline-eks/application"
+  filter_pattern = "{ $.kubernetes.namespace_name = \"fiveline\" }"
+
   destination_arn = aws_kinesis_firehose_delivery_stream.service_events.arn
   role_arn        = aws_iam_role.logs_to_firehose.arn
 }
