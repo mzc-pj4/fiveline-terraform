@@ -273,7 +273,7 @@ resource "aws_lambda_function" "guardduty_auto_block" {
 resource "aws_cloudwatch_event_rule" "guardduty_high_findings" {
   name        = "${local.project}-guardduty-high-findings"
   description = "GuardDuty HIGH 심각도 Finding → Lambda 자동 차단"
-  is_enabled  = true
+  state       = "ENABLED"
 
   event_pattern = jsonencode({
     source      = ["aws.guardduty"]
