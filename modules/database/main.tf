@@ -411,3 +411,26 @@ resource "aws_elasticache_replication_group" "redis_cluster" {
     Name    = "${local.project}-redis"
   }
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# Redis AUTH token → Secrets Manager (ESO가 파드에 주입)
+# ════════════════════════════════════════════════════════════════════════════
+
+resource "aws_secretsmanager_secret" "redis_auth" {
+  name                    = "fiveline/app/redis-credential"
+  description             = "ElastiCache Redis connection URL for fiveline services"
+  kms_key_id              = var.kms_secrets_arn
+  recovery_window_in_days = 0
+
+  tags = {
+    Service = "cache"
+    Name    = "${local.project}-redis-credential"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "redis_auth" {
+  secret_id = aws_secretsmanager_secret.redis_auth.id
+  secret_string = jsonencode({
+    REDIS_URL = "rediss://:${random_password.redis_auth_token.result}@${aws_elasticache_replication_group.redis_cluster.primary_endpoint_address}:6379"
+  })
+}
