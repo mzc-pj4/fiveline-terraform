@@ -430,6 +430,7 @@ resource "aws_secretsmanager_secret" "redis_auth" {
 resource "aws_secretsmanager_secret_version" "redis_auth" {
   secret_id = aws_secretsmanager_secret.redis_auth.id
   secret_string = jsonencode({
-    REDIS_URL = "rediss://:${random_password.redis_auth_token.result}@${aws_elasticache_replication_group.redis_cluster.primary_endpoint_address}:6379"
+    REDIS_URL      = "rediss://:${random_password.redis_auth_token.result}@${aws_elasticache_replication_group.redis_cluster.primary_endpoint_address}:6379"
+    REDIS_READ_URL = "rediss://:${random_password.redis_auth_token.result}@${aws_elasticache_replication_group.redis_cluster.reader_endpoint_address}:6379"
   })
 }
