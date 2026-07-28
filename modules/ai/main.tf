@@ -571,6 +571,12 @@ resource "aws_iam_role_policy" "langgraph_agent_custom" {
           "${var.data_lake_bucket_arn}/*",
         ]
       },
+      {
+        Sid      = "InvokeAiRemediation"
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = aws_lambda_function.ai_remediation.arn
+      },
     ]
   })
 }
@@ -596,6 +602,7 @@ resource "aws_lambda_function" "langgraph_agent" {
       CONVERSATION_TABLE     = aws_dynamodb_table.conversation_history.name
       CONVERSATION_TTL_DAYS  = "30"
       MAX_HISTORY_MESSAGES   = "20"
+      REMEDIATION_LAMBDA     = aws_lambda_function.ai_remediation.function_name
     }
   }
 
@@ -732,4 +739,175 @@ resource "aws_lambda_permission" "allow_eventbridge_report_embedder" {
   function_name = aws_lambda_function.report_embedder.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.report_embedder_daily.arn
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# AI Auto-Remediation (Lambda + DynamoDB + Secrets Manager)
+# 챗봇 → 자원 정리 PR 자동 생성. 머지는 사람만.
+# Bedrock Claude → Terraform 코드 변경 → GitHub PR
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── DynamoDB: Audit (모든 액션 영구 기록) ──────────────────────────────────
+
+resource "aws_dynamodb_table" "ai_remediation_audit" {
+  name         = "${local.project}-ai-remediation-audit"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "request_id"
+
+  attribute {
+    name = "request_id"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  tags = {
+    Service = "ai"
+    Name    = "${local.project}-ai-remediation-audit"
+  }
+}
+
+# ── Secrets Manager: GitHub PAT (값은 콘솔/CLI에서 별도 입력) ────────────────
+
+resource "aws_secretsmanager_secret" "ai_remediation_github_token" {
+  name                    = "${local.project}-ai-remediation-github-pat"
+  description             = "GitHub Personal Access Token for AI Auto-Remediation PR 생성"
+  recovery_window_in_days = 0
+
+  tags = {
+    Service = "ai"
+    Name    = "${local.project}-ai-remediation-github-pat"
+  }
+}
+
+# ── IAM Role ────────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "ai_remediation" {
+  name = "${local.project}-ai-remediation"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Service = "ai"
+    Name    = "${local.project}-ai-remediation"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ai_remediation_basic" {
+  role       = aws_iam_role.ai_remediation.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "ai_remediation_custom" {
+  name = "ai-remediation-custom"
+  role = aws_iam_role.ai_remediation.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "BedrockInvoke"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel", "bedrock:Converse"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-*",
+        ]
+      },
+      {
+        Sid      = "SecretsManagerReadGithub"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.ai_remediation_github_token.arn
+      },
+      {
+        Sid    = "DynamoDBAudit"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+        ]
+        Resource = aws_dynamodb_table.ai_remediation_audit.arn
+      },
+      {
+        Sid    = "EC2ResourceValidation"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeVolumes",
+          "ec2:DescribeInstances",
+          "ec2:DescribeAddresses",
+          "ec2:DescribeSnapshots",
+        ]
+        Resource = "*" # nosonar — describe API는 자원 단위 제한 불가
+      },
+      {
+        Sid      = "RDSResourceValidation"
+        Effect   = "Allow"
+        Action   = ["rds:DescribeDBInstances", "rds:DescribeDBClusters"]
+        Resource = "*" # nosonar — describe API는 자원 단위 제한 불가
+      },
+    ]
+  })
+}
+
+# ── Lambda Function (S3 패키지 패턴) ────────────────────────────────────────
+
+data "aws_s3_object" "ai_remediation_zip" {
+  bucket = var.artifacts_bucket
+  key    = "lambda/ai/ai-remediation.zip"
+}
+
+resource "aws_lambda_function" "ai_remediation" {
+  function_name = "${local.project}-ai-remediation"
+  role          = aws_iam_role.ai_remediation.arn
+  handler       = "handler.handler"
+  runtime       = "python3.12"
+  timeout       = 120
+  memory_size   = 512
+
+  s3_bucket        = var.artifacts_bucket
+  s3_key           = "lambda/ai/ai-remediation.zip"
+  source_code_hash = data.aws_s3_object.ai_remediation_zip.etag
+
+  environment {
+    variables = {
+      GITHUB_TOKEN_SECRET   = aws_secretsmanager_secret.ai_remediation_github_token.arn
+      GITHUB_REPO           = var.ai_remediation_github_repo
+      GITHUB_BASE_BRANCH    = var.ai_remediation_base_branch
+      TERRAFORM_PATH_PREFIX = "modules/ai"
+      AUDIT_TABLE           = aws_dynamodb_table.ai_remediation_audit.name
+      BEDROCK_MODEL         = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+      MOCK_MODE             = "true" # ⭐ 초기 테스트: 실제 PR 안 만들고 로그만
+    }
+  }
+
+  tags = {
+    Service = "ai"
+    Name    = "${local.project}-ai-remediation"
+  }
+}
+
+# ── LangGraph 가 호출할 수 있는 권한 ────────────────────────────────────────
+
+resource "aws_lambda_permission" "ai_remediation_from_langgraph" {
+  statement_id  = "AllowLangGraphInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ai_remediation.function_name
+  principal     = aws_iam_role.langgraph_agent.arn
+  source_arn    = aws_lambda_function.langgraph_agent.arn
 }

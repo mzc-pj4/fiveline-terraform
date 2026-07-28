@@ -67,3 +67,17 @@ variable "alarm_history_table_arn" {
   description = "monitoring 모듈에서 넘겨받는 alarm_history DynamoDB 테이블 ARN"
   type        = string
 }
+
+# ── AI Auto-Remediation ─────────────────────────────────────────────────────
+
+variable "ai_remediation_github_repo" {
+  description = "AI Auto-Remediation 이 PR을 만들 GitHub 레포 (owner/repo)"
+  type        = string
+  default     = "mzc-pj4/fiveline-terraform"
+}
+
+variable "ai_remediation_base_branch" {
+  description = "AI Auto-Remediation PR 머지 대상 브랜치"
+  type        = string
+  default     = "develop"
+}

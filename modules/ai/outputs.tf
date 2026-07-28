@@ -78,3 +78,25 @@ output "conversation_history_table_arn" {
   value       = aws_dynamodb_table.conversation_history.arn
   description = "Conversation History DynamoDB 테이블 ARN"
 }
+
+# ── AI Auto-Remediation ─────────────────────────────────────────────────────
+
+output "ai_remediation_function_name" {
+  value       = aws_lambda_function.ai_remediation.function_name
+  description = "AI Auto-Remediation Lambda 함수 이름"
+}
+
+output "ai_remediation_function_arn" {
+  value       = aws_lambda_function.ai_remediation.arn
+  description = "AI Auto-Remediation Lambda 함수 ARN"
+}
+
+output "ai_remediation_github_token_secret_arn" {
+  value       = aws_secretsmanager_secret.ai_remediation_github_token.arn
+  description = "GitHub PAT Secrets Manager ARN (콘솔에서 값 입력 필요)"
+}
+
+output "ai_remediation_audit_table_name" {
+  value       = aws_dynamodb_table.ai_remediation_audit.name
+  description = "AI Auto-Remediation Audit DDB 테이블 이름"
+}
